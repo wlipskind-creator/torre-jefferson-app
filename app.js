@@ -33,6 +33,7 @@ const ICONS = {
   pen: '<path d="M12 20h9"/><path d="M16.5 3.5a2.1 2.1 0 0 1 3 3L7 19l-4 1 1-4z"/>',
   out: '<path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4"/><path d="M16 17l5-5-5-5M21 12H9"/>',
   palette: '<circle cx="13.5" cy="6.5" r="1.5"/><circle cx="17.5" cy="10.5" r="1.5"/><circle cx="8.5" cy="7.5" r="1.5"/><circle cx="6.5" cy="12.5" r="1.5"/><path d="M12 2a10 10 0 0 0 0 20c1.1 0 2-.9 2-2 0-.5-.2-1-.5-1.3-.3-.4-.5-.8-.5-1.3 0-1.1.9-2 2-2h2.4A5.6 5.6 0 0 0 22 10c0-4.4-4.5-8-10-8z"/>',
+  help: '<circle cx="12" cy="12" r="10"/><path d="M9.1 9a3 3 0 0 1 5.8 1c0 2-3 3-3 3"/><path d="M12 17h.01"/>',
   print: '<path d="M6 9V2h12v7"/><path d="M6 18H4a2 2 0 0 1-2-2v-5a2 2 0 0 1 2-2h16a2 2 0 0 1 2 2v5a2 2 0 0 1-2 2h-2"/><rect x="6" y="14" width="12" height="8"/>'
 };
 const ic = (n, s = 20) => `<svg width="${s}" height="${s}" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">${ICONS[n]}</svg>`;
@@ -132,18 +133,20 @@ function vLogin() {
     '<label>Código<input name="codigo" type="password" autocomplete="current-password" required></label>' +
     (ui.loginErr ? '<div class="err" role="alert">' + esc(ui.loginErr) + '</div>' : '') +
     '<button class="btn"' + (ui.busy ? ' disabled' : '') + '>' + (ui.busy ? 'Ingresando…' : 'Ingresar') + '</button>' +
-    '<span class="muted">Versión piloto. Si no tenés el código, pedilo en portería.</span></div></form></main>';
+    '<span class="muted">Versión piloto. Si no tenés el código, pedilo en portería.</span></div></form>' +
+    '<div class="login"><div class="card"><h2>' + ic('help', 18) + ' ¿Cómo ingreso?</h2>' + HELP_LOGIN + '</div></div></main>';
 }
 
 function tabsFor() {
   if (who.rol === 'vecino') {
     const pend = count(S.avisos, (a) => a.estado === 'Para retirar');
-    return [['inicio', 'Inicio', 'home', pend], ['reservas', 'Reservas', 'cal'], ['porteria', 'Portería', 'chat'], ['ocupantes', 'Ocupantes', 'users'], ['comunicados', 'Comunicados', 'mega']];
+    return [['inicio', 'Inicio', 'home', pend], ['reservas', 'Reservas', 'cal'], ['porteria', 'Portería', 'chat'], ['ocupantes', 'Ocupantes', 'users'], ['comunicados', 'Comunicados', 'mega'], ['ayuda', 'Ayuda', 'help']];
   }
-  if (who.rol === 'comision') return [['comunicados', 'Comunicados', 'mega'], ['novedades', 'Novedades', 'video'], ['observaciones', 'Observaciones', 'list', S.observaciones.length]];
+  if (who.rol === 'comision') return [['comunicados', 'Comunicados', 'mega'], ['novedades', 'Novedades', 'video'], ['observaciones', 'Observaciones', 'list', S.observaciones.length], ['ayuda', 'Ayuda', 'help']];
   const p = count(S.pedidos, (x) => x.estado !== 'Atendido'); const n = count(S.novedades, (x) => x.estado !== 'Resuelta');
   const t = [['panel', 'Panel', 'desk', p], ['novedades', 'Novedades', 'video', n], ['reservasP', 'Reservas', 'cal'], ['ocupantesP', 'Ocupantes', 'users']];
   if (who.rol === 'encargado') t.push(['bitacora', 'Bitácora diaria', 'book'], ['observaciones', 'Observaciones', 'list', S.observaciones.length], ['datos', 'Datos de prueba', 'list']);
+  t.push(['ayuda', 'Ayuda', 'help']);
   return t;
 }
 
@@ -284,6 +287,55 @@ VIEWS.datos = () => {
   return '<div class="grid"><div class="card"><h2>Datos de ejemplo</h2><span>Carga reservas, pedidos, avisos, ocupantes, comunicados y novedades de ejemplo para la prueba.</span><span class="muted">Registros actuales: ' + n + '.</span><div><button class="btn" data-a="seed"' + (ui.busy ? ' disabled' : '') + '>Cargar datos de ejemplo</button></div></div>' +
     '<div class="card"><h2>Empezar de cero</h2><span>Borra todos los registros de la prueba (no borra usuarios ni observaciones).</span><div><button class="btn danger" data-a="wipe"' + (ui.busy ? ' disabled' : '') + '>Borrar datos de prueba</button></div></div></div>';
 };
+
+/* ---------------- Ayuda / instrucciones ---------------- */
+const steps = (arr) => '<ol class="steps">' + arr.map((x) => '<li>' + x + '</li>').join('') + '</ol>';
+const sec = (title, body, open) => '<details class="help"' + (open ? ' open' : '') + '><summary>' + title + '</summary><div class="help-b">' + body + '</div></details>';
+const HELP_LOGIN = steps([
+  'Elegí quién sos: <b>Vecino</b>, <b>Portero</b>, <b>Encargado</b> o <b>Comisión</b>.',
+  'Si sos vecino, escribí el <b>número de tu apartamento</b> tal como figura en la puerta (del 107 al 1712).',
+  'Escribí el <b>código</b> que te dio la comisión o portería y tocá <b>Ingresar</b>.',
+  'La app recuerda tu ingreso: la próxima vez entrás directo.'
+]);
+const HELP_INSTALAR = sec('Instalar la app en el celular',
+  '<p><b>iPhone (Safari):</b></p>' + steps(['Abrí el link de la app en Safari.', 'Tocá el botón <b>Compartir</b> (cuadrado con flecha hacia arriba).', 'Elegí <b>Agregar a pantalla de inicio</b> y tocá <b>Agregar</b>.']) +
+  '<p><b>Android (Chrome):</b></p>' + steps(['Abrí el link de la app en Chrome.', 'Tocá el menú <b>⋮</b> arriba a la derecha.', 'Elegí <b>Instalar app</b> o <b>Agregar a pantalla principal</b>.']) +
+  '<p class="muted">Queda un ícono como cualquier app. No hace falta descargar nada de las tiendas.</p>');
+const HELP_COMUN = [
+  sec('Cambiar colores o modo noche', steps(['Tocá el botón de la <b>paleta</b> arriba a la derecha.', 'En <b>Modo</b> elegí Automático (sigue al celular), Día o Noche.', 'En <b>Color</b> elegí el que más te guste. Se guarda en este celular.'])),
+  sec('Anotar una observación (durante la prueba)', steps(['Tocá el botón naranja <b>Anotar observación</b>, abajo a la derecha.', 'Escribí qué te pareció, qué no se entiende o qué falta.', 'Tocá <b>Guardar</b>. Queda registrada con la pantalla en la que estabas.'])),
+  sec('Salir', '<p>Tocá <b>Salir</b> arriba a la derecha y confirmá. Para volver a entrar necesitás el código.</p>'),
+  sec('Algo no funciona', '<ul class="steps"><li><b>"Código incorrecto":</b> revisá mayúsculas y minúsculas.</li><li><b>"Ese número de apartamento no existe":</b> los apartamentos van del 07 al 12 en cada piso (ej.: 507, 1212).</li><li><b>No veo un cambio:</b> los datos se actualizan solos; si no, cerrá y volvé a abrir la app.</li><li><b>Sin conexión:</b> la app necesita internet para guardar.</li></ul><p>Ante cualquier duda, consultá en portería: <b>' + esc(TEL) + '</b>.</p>')
+];
+const HELP = {
+  vecino: () => [
+    sec('Inicio: lo importante del día', '<p>Arriba ves los <b>avisos de portería</b> (paquetes, visitas, delivery). Cuando retires un paquete, tocá <b>Ya lo retiré</b> para que portería lo sepa.</p><p>También ves tus próximas reservas y el último comunicado de la comisión.</p>', true),
+    sec('Reservar el gimnasio o el cowork', steps(['Andá a <b>Reservas</b>.', 'Elegí <b>Gimnasio</b> o <b>Cowork</b>.', 'Elegí el <b>día</b> (hasta 7 días adelante).', 'Tocá un <b>horario libre</b> y confirmá. Cada turno dura 1 hora.', 'Para cancelar, tocá tu reserva (en color) o usá <b>Cancelar</b> en "Mis reservas".']) + '<p class="muted">Los turnos en gris están completos o ya pasaron. Leé las normas de uso que aparecen debajo de los horarios.</p>'),
+    sec('Hacer un pedido a portería', steps(['Andá a <b>Portería</b>.', 'Elegí el tipo: autorizar una visita, avisar una llegada o salida, reportar un problema u otro.', 'Escribí el detalle (quién, cuándo, dónde) y tocá <b>Enviar a portería</b>.', 'En "Mis pedidos" seguís el estado: <b>Pendiente</b>, <b>En curso</b> o <b>Atendido</b>, y las notas que te deje portería.']) + '<p class="muted">De 22 a 6 hay un solo portero: lo que no es urgente se atiende a la mañana. Para urgencias, llamá a recepción.</p>'),
+    sec('Registrar ocupantes de temporada', steps(['Andá a <b>Ocupantes</b>.', 'Elegí <b>Familia</b> o <b>Inquilinos</b>.', 'Completá responsable, teléfono con código de país (+598 o +54), cantidad de personas y fechas.', 'Tocá <b>Registrar</b>. Portería lo ve al instante.']) + '<p class="muted">Si cambian los planes, tocá <b>Quitar</b>. Al terminar la estadía el registro deja de mostrarse.</p>'),
+    sec('Leer los comunicados', '<p>En <b>Comunicados</b> están los avisos oficiales de la comisión (normas, mantenimiento, convivencia). No admiten comentarios: para consultas, escribí a portería.</p>'),
+    HELP_INSTALAR
+  ],
+  portero: () => [
+    sec('Panel: atender pedidos', steps(['En <b>Panel</b> ves los pedidos pendientes, del más viejo al más nuevo.', 'Tocá <b>Tomar (en curso)</b> cuando empieces a ocuparte.', 'Con <b>Agregar nota</b> le dejás un mensaje al vecino (ej.: "Se llamó al sanitario").', 'Cuando esté resuelto, tocá <b>Marcar atendido</b>. El vecino lo ve en su app.']), true),
+    sec('Avisar a un vecino (paquete, visita, delivery)', steps(['En <b>Registrar</b>, dejá elegido <b>Aviso al vecino</b>.', 'Escribí el número de apartamento.', 'Elegí el tipo de aviso y, si querés, un detalle (ej.: "caja grande en el depósito").', 'Tocá <b>Enviar aviso</b>. Los paquetes quedan "Para retirar" hasta que el vecino confirme.'])),
+    sec('Cargar un pedido que llega por teléfono', steps(['En <b>Registrar</b>, elegí <b>Pedido por teléfono</b>.', 'Escribí el apartamento, elegí el tipo y anotá el detalle.', 'Tocá <b>Registrar pedido</b>. Queda en pendientes para vos o el turno siguiente.'])),
+    sec('Registrar novedades del turno', steps(['Andá a <b>Novedades</b>.', 'Escribí qué pasó, elegí el tipo (incidente, rotura, visita/proveedor, otro) y el estado.', 'Tocá <b>Guardar novedad</b>.', 'Cuando cambie la situación, actualizá el estado desde la lista: <b>Abierta</b>, <b>En curso</b> o <b>Resuelta</b>.']) + '<p class="muted">Adjuntar videos se habilita en la próxima etapa.</p>'),
+    sec('Reservas y ocupantes', '<p>En <b>Reservas</b> ves todas las próximas reservas del gimnasio y el cowork, y podés cancelar una si el vecino lo pide.</p><p>En <b>Ocupantes</b> ves quién está hoy en cada apartamento y las próximas llegadas, con teléfono de contacto.</p>'),
+    HELP_INSTALAR
+  ],
+  encargado: () => HELP.portero().concat([
+    sec('Bitácora diaria (solo encargado)', steps(['Andá a <b>Bitácora diaria</b>.', 'Elegí el <b>día</b>.', 'Revisá el resumen: novedades con su estado, pedidos, avisos y reservas.', 'Tocá <b>Imprimir o guardar PDF</b>. En el celular, elegí "Guardar como PDF" o compartir.'])),
+    sec('Observaciones y datos de prueba', '<p>En <b>Observaciones</b> ves todo lo que anotaron quienes probaron la app; con <b>Copiar todas</b> las pasás por WhatsApp o mail.</p><p>En <b>Datos de prueba</b> podés cargar los datos de ejemplo o borrar todo para empezar de cero.</p>')
+  ]),
+  comision: () => [
+    sec('Publicar un comunicado', steps(['Andá a <b>Comunicados</b>.', 'Escribí el título, elegí la etiqueta (Importante, Mantenimiento, Convivencia o General) y el texto.', 'Tocá <b>Publicar</b>. Lo ven todos los vecinos, también los inquilinos de temporada.', 'Para quitarlo, tocá <b>Eliminar</b>.']) + '<p class="muted">Los comunicados no admiten comentarios.</p>', true),
+    sec('Ver las novedades de portería', '<p>En <b>Novedades</b> ves lo que registra portería en cada turno y su estado. Es solo lectura.</p>'),
+    sec('Observaciones de la prueba', '<p>En <b>Observaciones</b> ves lo que anotaron quienes probaron la app.</p>'),
+    HELP_INSTALAR
+  ]
+};
+VIEWS.ayuda = () => '<div class="hello"><h1>Cómo usar la app</h1><span class="muted">Instrucciones para ' + esc(ROLES[who.rol].toLowerCase()) + '. Tocá cada tema para abrirlo.</span></div><div class="help-list">' + HELP[who.rol]().concat(HELP_COMUN).join('') + '</div>';
 
 /* ---------------- Apariencia (colores y modo noche) ---------------- */
 const THEMES = [['mar', 'Verde mar', '#0F6E6E'], ['azul', 'Azul', '#1F5FA8'], ['terracota', 'Terracota', '#B04A22'], ['violeta', 'Violeta', '#6B46A8'], ['oliva', 'Oliva', '#3F7A2E']];
