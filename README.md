@@ -23,7 +23,7 @@ App web instalable para la Torre Jefferson: reservas de gimnasio y cowork, pedid
 
 | Quién | Usuario | Código |
 |---|---|---|
-| Vecino | Número de apartamento (101 a 1706) | Código de prueba (`config.js`) |
+| Vecino | Número de apartamento (107 a 1712: piso + 07 a 12) | Código de prueba (`config.js`) |
 | Portero / Encargado / Comisión | Se elige el rol en la pantalla de ingreso | El mismo código |
 
 La primera vez que alguien entra con un apartamento, la cuenta se crea sola con el código de prueba.
@@ -32,6 +32,10 @@ La primera vez que alguien entra con un apartamento, la cuenta se crea sola con 
 
 - **iPhone (Safari):** abrir el link → botón Compartir → *Agregar a pantalla de inicio*.
 - **Android (Chrome):** abrir el link → menú ⋮ → *Instalar app* o *Agregar a pantalla principal*.
+
+## Apariencia
+
+Botón **Apariencia** (paleta) arriba: modo Automático (sigue el día/noche del celular), Día o Noche, y 5 colores (Verde mar, Azul, Terracota, Violeta, Oliva). Se guarda en cada dispositivo.
 
 ## Configuración (`config.js`)
 

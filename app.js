@@ -32,6 +32,7 @@ const ICONS = {
   list: '<path d="M8 6h13M8 12h13M8 18h13M3 6h.01M3 12h.01M3 18h.01"/>',
   pen: '<path d="M12 20h9"/><path d="M16.5 3.5a2.1 2.1 0 0 1 3 3L7 19l-4 1 1-4z"/>',
   out: '<path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4"/><path d="M16 17l5-5-5-5M21 12H9"/>',
+  palette: '<circle cx="13.5" cy="6.5" r="1.5"/><circle cx="17.5" cy="10.5" r="1.5"/><circle cx="8.5" cy="7.5" r="1.5"/><circle cx="6.5" cy="12.5" r="1.5"/><path d="M12 2a10 10 0 0 0 0 20c1.1 0 2-.9 2-2 0-.5-.2-1-.5-1.3-.3-.4-.5-.8-.5-1.3 0-1.1.9-2 2-2h2.4A5.6 5.6 0 0 0 22 10c0-4.4-4.5-8-10-8z"/>',
   print: '<path d="M6 9V2h12v7"/><path d="M6 18H4a2 2 0 0 1-2-2v-5a2 2 0 0 1 2-2h16a2 2 0 0 1 2 2v5a2 2 0 0 1-2 2h-2"/><rect x="6" y="14" width="12" height="8"/>'
 };
 const ic = (n, s = 20) => `<svg width="${s}" height="${s}" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">${ICONS[n]}</svg>`;
@@ -58,7 +59,7 @@ const AV_TIPOS = ['Paquete', 'Visita en recepción', 'Delivery', 'Otro'];
 const NOV_TIPOS = ['Incidente', 'Rotura', 'Visita / proveedor', 'Otro'];
 const COLS = ['reservas', 'pedidos', 'avisos', 'ocupantes', 'comunicados', 'novedades', 'observaciones'];
 
-function validApto(a) { const n = parseInt(a, 10); if (!/^\d{3,4}$/.test(a)) return false; const piso = Math.floor(n / 100), u = n % 100; return piso >= 1 && piso <= 17 && u >= 1 && u <= 6; }
+function validApto(a) { const n = parseInt(a, 10); if (!/^\d{3,4}$/.test(a)) return false; const piso = Math.floor(n / 100), u = n % 100; return piso >= 1 && piso <= 17 && u >= 7 && u <= 12; }
 function emailFor(rol, apto) { return (rol === 'vecino' ? 'apto' + apto : rol) + '@' + CFG.dominio; }
 function whoFromEmail(email) {
   const u = (email || '').split('@')[0];
@@ -124,10 +125,10 @@ async function run(fn, ok) { try { await fn(); if (ok) toast(ok); } catch (e) { 
 function vLogin() {
   const r = ui.loginRol;
   const roles = [['vecino', 'Vecino', 'home'], ['portero', 'Portero', 'desk'], ['encargado', 'Encargado', 'shield'], ['comision', 'Comisión', 'mega']];
-  return '<header class="top"><div class="top-in"><div class="brand"><small>Torre Jefferson</small><b>Ingresar</b></div></div></header>' +
+  return '<header class="top"><div class="top-in"><div class="brand"><small>Torre Jefferson</small><b>Ingresar</b></div><button class="btn-top" data-a="look" aria-label="Apariencia">' + ic('palette', 16) + 'Apariencia</button></div></header>' +
     '<main><form class="login" data-f="login"><div class="card"><h2>Bienvenido</h2>' +
     '<div class="pills" role="group" aria-label="Quién sos">' + roles.map((x) => '<button type="button" class="pill' + (r === x[0] ? ' on' : '') + '" data-a="loginRol" data-r="' + x[0] + '">' + esc(x[1]) + '</button>').join('') + '</div>' +
-    (r === 'vecino' ? '<label>Número de apartamento<input name="apto" inputmode="numeric" autocomplete="username" required placeholder="Ej.: 1204"></label>' : '<p class="muted">Ingreso de ' + esc(ROLES[r].toLowerCase()) + '.</p>') +
+    (r === 'vecino' ? '<label>Número de apartamento<input name="apto" inputmode="numeric" autocomplete="username" required placeholder="Ej.: 1207"></label>' : '<p class="muted">Ingreso de ' + esc(ROLES[r].toLowerCase()) + '.</p>') +
     '<label>Código<input name="codigo" type="password" autocomplete="current-password" required></label>' +
     (ui.loginErr ? '<div class="err" role="alert">' + esc(ui.loginErr) + '</div>' : '') +
     '<button class="btn"' + (ui.busy ? ' disabled' : '') + '>' + (ui.busy ? 'Ingresando…' : 'Ingresar') + '</button>' +
@@ -149,7 +150,7 @@ function tabsFor() {
 function vShell() {
   const tabs = tabsFor(); if (!ui.tab || !tabs.some((t) => t[0] === ui.tab)) ui.tab = tabs[0][0];
   const label = ROLES[who.rol] + (who.rol === 'vecino' ? ' · apto ' + who.apto : '');
-  let h = '<header class="top"><div class="top-in"><div class="brand"><small>Torre Jefferson</small><b>' + (who.rol === 'vecino' ? 'Mi edificio' : 'Portería') + '</b></div><span class="chip-role">' + esc(label) + '</span><button class="btn-top" data-a="logout">' + ic('out', 16) + 'Salir</button></div></header>';
+  let h = '<header class="top"><div class="top-in"><div class="brand"><small>Torre Jefferson</small><b>' + (who.rol === 'vecino' ? 'Mi edificio' : 'Portería') + '</b></div><span class="chip-role">' + esc(label) + '</span><button class="btn-top" data-a="look" aria-label="Apariencia">' + ic('palette', 16) + '</button><button class="btn-top" data-a="logout">' + ic('out', 16) + 'Salir</button></div></header>';
   h += '<nav class="tabs" aria-label="Secciones"><div class="tabs-in">' + tabs.map((t) => '<button class="tab' + (t[0] === ui.tab ? ' on' : '') + '" data-a="tab" data-t="' + t[0] + '">' + ic(t[2], 18) + esc(t[1]) + (t[3] ? '<span class="badge">' + t[3] + '</span>' : '') + '</button>').join('') + '</div></nav>';
   h += '<main>' + (loaded.size ? VIEWS[ui.tab]() : '<div class="loading">Cargando datos…</div>') + '</main>';
   h += '<button class="fab no-print" data-a="obs">' + ic('pen', 18) + 'Anotar observación</button>';
@@ -223,7 +224,7 @@ VIEWS.panel = () => {
       '<div class="row">' + (p.estado === 'Pendiente' ? '<button class="btn ghost sm" data-a="pedEstado" data-id="' + p.id + '" data-e="En curso">Tomar (en curso)</button>' : '') + '<button class="btn ghost sm" data-a="pedNota" data-id="' + p.id + '">Agregar nota</button><button class="btn sm" data-a="pedEstado" data-id="' + p.id + '" data-e="Atendido">Marcar atendido</button></div></div>').join('') : '<span class="empty">No hay pedidos pendientes.</span>') + '</div>' +
     '<form class="card" data-f="registro"><h2>Registrar</h2><div class="seg"><button type="button" class="' + (ui.regMode === 'aviso' ? 'on' : '') + '" data-a="regMode" data-m="aviso">Aviso al vecino</button><button type="button" class="' + (ui.regMode === 'tel' ? 'on' : '') + '" data-a="regMode" data-m="tel">Pedido por teléfono</button></div>' +
     '<span class="muted">' + (ui.regMode === 'aviso' ? 'El vecino lo ve en su app al instante.' : 'Para quien llama a recepción: queda registrado para el turno.') + '</span>' +
-    '<label>Apartamento<input name="apto" required inputmode="numeric" placeholder="Ej.: 1204"></label><div class="pills">' + kinds.map((k) => '<button type="button" class="pill' + (ui.regKind === k ? ' on' : '') + '" data-a="pick" data-k="regKind" data-v="' + esc(k) + '">' + esc(k) + '</button>').join('') + '</div>' +
+    '<label>Apartamento<input name="apto" required inputmode="numeric" placeholder="Ej.: 1207"></label><div class="pills">' + kinds.map((k) => '<button type="button" class="pill' + (ui.regKind === k ? ' on' : '') + '" data-a="pick" data-k="regKind" data-v="' + esc(k) + '">' + esc(k) + '</button>').join('') + '</div>' +
     '<label>Detalle' + (ui.regMode === 'aviso' ? ' (opcional)' : '') + '<input name="detalle"' + (ui.regMode === 'tel' ? ' required' : '') + '></label><button class="btn">' + (ui.regMode === 'aviso' ? 'Enviar aviso' : 'Registrar pedido') + '</button>' +
     '<h3 style="font-size:15px;margin-top:6px">Avisos enviados hoy</h3>' + (avHoy.length ? avHoy.map((a) => '<div class="item-h"><span>' + esc(hhmm(a.creado)) + ' · Apto ' + esc(a.apto) + ' · ' + esc(a.tipo) + '</span>' + estadoTag(a.estado) + '</div>').join('') : '<span class="empty">Ninguno todavía.</span>') + '</form>' +
     '<div class="card"><h2>Reservas de hoy</h2>' + (resHoy.length ? '<div class="scroll"><table><tr><th>Hora</th><th>Espacio</th><th>Apto</th></tr>' + resHoy.map((r) => '<tr><td><b>' + r.hora + '</b></td><td>' + SPACES[r.espacio].name + '</td><td>' + esc(r.apto) + '</td></tr>').join('') + '</table></div>' : '<span class="empty">No hay reservas hoy.</span>') + '</div></div>';
@@ -262,13 +263,13 @@ function bitSheet(date) {
   const av = S.avisos.filter((a) => on(a.creado)).sort((a, b) => a.creado - b.creado);
   const res = S.reservas.filter((r) => r.fecha === date).sort((a, b) => a.hora.localeCompare(b.hora));
   const t = (head, rows) => rows.length ? '<table><tr>' + head.map((h) => '<th>' + h + '</th>').join('') + '</tr>' + rows.map((r) => '<tr>' + r.map((c) => '<td>' + esc(c) + '</td>').join('') + '</tr>').join('') + '</table>' : '<p class="empty">Sin registros.</p>';
-  return '<div class="sheet"><div class="item-h" style="border-bottom:2px solid #1B2733;padding-bottom:8px"><div><div style="font-size:11px;font-weight:700;letter-spacing:.1em;text-transform:uppercase;color:#0F6E6E">Torre Jefferson</div><div style="font-size:20px;font-weight:800">Bitácora de portería</div></div><div style="text-align:right;font-size:13px">' + esc(dlabel(date)) + '<br>Encargado de portería</div></div>' +
+  return '<div class="sheet"><div class="item-h sheet-top"><div><div class="sheet-kick">Torre Jefferson</div><div style="font-size:20px;font-weight:800">Bitácora de portería</div></div><div style="text-align:right;font-size:13px">' + esc(dlabel(date)) + '<br>Encargado de portería</div></div>' +
     '<div class="stats"><div class="stat"><b>' + nov.length + '</b><span>novedades</span></div><div class="stat"><b>' + count(nov, (n) => n.estado !== 'Resuelta') + '</b><span>sin resolver</span></div><div class="stat"><b>' + ped.length + '</b><span>pedidos de vecinos</span></div><div class="stat"><b>' + av.length + '</b><span>avisos enviados</span></div><div class="stat"><b>' + res.length + '</b><span>reservas</span></div></div>' +
     '<h3>Novedades</h3>' + t(['Hora', 'Novedad', 'Tipo', 'Estado', 'Video'], nov.map((n) => [hhmm(n.creado), n.titulo + (n.detalle ? ' — ' + n.detalle : ''), n.tipo, n.estado, (n.videos || []).length ? 'Sí (' + n.videos.length + ')' : '—'])) +
     '<h3>Pedidos de vecinos</h3>' + t(['Hora', 'Apto', 'Pedido', 'Origen', 'Estado'], ped.map((p) => [hhmm(p.creado), p.apto, p.tipo + ': ' + p.detalle, p.origen, p.estado])) +
     '<h3>Avisos a vecinos</h3>' + t(['Hora', 'Apto', 'Aviso', 'Estado'], av.map((a) => [hhmm(a.creado), a.apto, a.tipo + (a.detalle ? ': ' + a.detalle : ''), a.estado])) +
     '<h3>Reservas</h3>' + t(['Hora', 'Espacio', 'Apto'], res.map((r) => [r.hora, SPACES[r.espacio].name, r.apto])) +
-    '<div class="item-h" style="font-size:12px;color:#4F5B66;margin-top:16px"><span>Firma del encargado: ______________________</span><span>Generada ' + esc(when(Date.now())) + '</span></div></div>';
+    '<div class="item-h muted" style="font-size:12px;margin-top:16px"><span>Firma del encargado: ______________________</span><span>Generada ' + esc(when(Date.now())) + '</span></div></div>';
 }
 VIEWS.bitacora = () => '<div class="card no-print" style="margin-bottom:16px"><h2>Bitácora diaria</h2><span class="muted">Solo para el encargado de portería. Resume novedades con su estado, pedidos, avisos y reservas del día.</span><div class="row" style="align-items:flex-end"><label style="flex:0 1 220px">Día<input type="date" data-c="bitDate" value="' + ui.bitDate + '"></label><button class="btn dark" data-a="print">' + ic('print', 18) + 'Imprimir o guardar PDF</button></div></div>' + bitSheet(ui.bitDate);
 
@@ -283,6 +284,26 @@ VIEWS.datos = () => {
   return '<div class="grid"><div class="card"><h2>Datos de ejemplo</h2><span>Carga reservas, pedidos, avisos, ocupantes, comunicados y novedades de ejemplo para la prueba.</span><span class="muted">Registros actuales: ' + n + '.</span><div><button class="btn" data-a="seed"' + (ui.busy ? ' disabled' : '') + '>Cargar datos de ejemplo</button></div></div>' +
     '<div class="card"><h2>Empezar de cero</h2><span>Borra todos los registros de la prueba (no borra usuarios ni observaciones).</span><div><button class="btn danger" data-a="wipe"' + (ui.busy ? ' disabled' : '') + '>Borrar datos de prueba</button></div></div></div>';
 };
+
+/* ---------------- Apariencia (colores y modo noche) ---------------- */
+const THEMES = [['mar', 'Verde mar', '#0F6E6E'], ['azul', 'Azul', '#1F5FA8'], ['terracota', 'Terracota', '#B04A22'], ['violeta', 'Violeta', '#6B46A8'], ['oliva', 'Oliva', '#3F7A2E']];
+function getLook() { let m = 'auto', t = 'mar'; try { m = localStorage.getItem('tj-mode') || 'auto'; t = localStorage.getItem('tj-theme') || 'mar'; } catch (_) {} return { m, t }; }
+function applyLook() {
+  const { m, t } = getLook(); const dark = m === 'dark' || (m === 'auto' && window.matchMedia('(prefers-color-scheme: dark)').matches);
+  document.documentElement.dataset.mode = dark ? 'dark' : 'light'; document.documentElement.dataset.theme = t;
+  const meta = document.querySelector('meta[name=theme-color]'); if (meta) meta.content = dark ? '#0B1015' : '#1B2733';
+}
+function setLook(m, t) { try { if (m) localStorage.setItem('tj-mode', m); if (t) localStorage.setItem('tj-theme', t); } catch (_) {} applyLook(); }
+window.matchMedia('(prefers-color-scheme: dark)').addEventListener('change', applyLook);
+applyLook();
+function lookModal() {
+  const { m, t } = getLook();
+  modal('<h2>Apariencia</h2><span class="muted">Se guarda en este dispositivo.</span><h3 style="font-size:15px">Modo</h3><div class="seg seg3">' +
+    [['auto', 'Automático'], ['light', 'Día'], ['dark', 'Noche']].map((x) => '<button type="button" class="' + (m === x[0] ? 'on' : '') + '" data-a="lookMode" data-v="' + x[0] + '">' + x[1] + '</button>').join('') + '</div>' +
+    '<span class="muted">Automático sigue el modo día/noche del celular.</span><h3 style="font-size:15px">Color</h3><div class="swatches">' +
+    THEMES.map((x) => '<button type="button" class="sw-wrap" data-a="lookTheme" data-v="' + x[0] + '"><span class="sw' + (t === x[0] ? ' on' : '') + '" style="background:' + x[2] + '">' + (t === x[0] ? '<svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M20 6L9 17l-5-5"/></svg>' : '') + '</span>' + x[1] + '</button>').join('') + '</div>' +
+    '<button class="btn">Listo</button>', () => {});
+}
 
 /* ---------------- Render ---------------- */
 function render() {
@@ -302,21 +323,21 @@ function seedDocs() {
   const ago = (min) => Date.now() - min * 60000;
   const R = (espacio, fecha, hora, apto) => ({ espacio, fecha, hora, apto, creado: Date.now(), ejemplo: true });
   return {
-    reservas: [R('gym', t0, '08:00', '305'), R('gym', t0, '08:00', '1603'), R('cowork', t0, '10:00', '1102'), R('gym', t0, '18:00', '708'), R('gym', t1, '08:00', '1204'), R('gym', t1, '19:00', '205'), R('gym', t1, '19:00', '402'), R('gym', t1, '19:00', '903'), R('gym', t1, '19:00', '1501'), R('cowork', t2, '09:00', '1706')],
+    reservas: [R('gym', t0, '08:00', '307'), R('gym', t0, '08:00', '1609'), R('cowork', t0, '10:00', '1110'), R('gym', t0, '18:00', '708'), R('gym', t1, '08:00', '1207'), R('gym', t1, '19:00', '208'), R('gym', t1, '19:00', '410'), R('gym', t1, '19:00', '911'), R('gym', t1, '19:00', '1508'), R('cowork', t2, '09:00', '1712')],
     pedidos: [
-      { apto: '1204', tipo: 'Autorizar visita', detalle: 'Llega mi hija con dos nietos a las 16 h.', origen: 'App', estado: 'Pendiente', nota: '', creado: ago(12), ejemplo: true },
+      { apto: '1207', tipo: 'Autorizar visita', detalle: 'Llega mi hija con dos nietos a las 16 h.', origen: 'App', estado: 'Pendiente', nota: '', creado: ago(12), ejemplo: true },
       { apto: '708', tipo: 'Reportar un problema', detalle: 'Pérdida de agua en el palier del piso 7.', origen: 'Teléfono', estado: 'En curso', nota: 'Se avisó al sanitario.', creado: ago(40), ejemplo: true },
-      { apto: '1501', tipo: 'Aviso de llegada o salida', detalle: 'Los inquilinos se van el lunes a las 10 h; dejan llaves en recepción.', origen: 'App', estado: 'Pendiente', nota: '', creado: ago(75), ejemplo: true },
-      { apto: '1204', tipo: 'Reportar un problema', detalle: 'La luz del palier del piso 12 no prende.', origen: 'App', estado: 'Atendido', nota: 'Se cambió la lámpara.', creado: ago(60 * 26), atendido: ago(60 * 25), ejemplo: true }
+      { apto: '1508', tipo: 'Aviso de llegada o salida', detalle: 'Los inquilinos se van el lunes a las 10 h; dejan llaves en recepción.', origen: 'App', estado: 'Pendiente', nota: '', creado: ago(75), ejemplo: true },
+      { apto: '1207', tipo: 'Reportar un problema', detalle: 'La luz del palier del piso 12 no prende.', origen: 'App', estado: 'Atendido', nota: 'Se cambió la lámpara.', creado: ago(60 * 26), atendido: ago(60 * 25), ejemplo: true }
     ],
     avisos: [
-      { apto: '1204', tipo: 'Paquete', detalle: 'Caja mediana, en el depósito de recepción.', estado: 'Para retirar', creado: ago(95), ejemplo: true },
-      { apto: '903', tipo: 'Delivery', detalle: '', estado: 'Informado', creado: ago(180), ejemplo: true }
+      { apto: '1207', tipo: 'Paquete', detalle: 'Caja mediana, en el depósito de recepción.', estado: 'Para retirar', creado: ago(95), ejemplo: true },
+      { apto: '911', tipo: 'Delivery', detalle: '', estado: 'Informado', creado: ago(180), ejemplo: true }
     ],
     ocupantes: [
-      { apto: '402', tipo: 'Inquilinos', responsable: 'Inquilino de ejemplo', tel: '+54 9 341 000 0000', personas: 4, desde: ymd(addDays(-3)), hasta: ymd(addDays(5)), creado: Date.now(), ejemplo: true },
-      { apto: '905', tipo: 'Familia', responsable: 'Familia del propietario (ejemplo)', tel: '+54 11 0000 0000', personas: 6, desde: ymd(addDays(-1)), hasta: ymd(addDays(12)), creado: Date.now(), ejemplo: true },
-      { apto: '1204', tipo: 'Familia', responsable: 'Hija del propietario (ejemplo)', tel: '+598 99 000 000', personas: 3, desde: ymd(addDays(40)), hasta: ymd(addDays(55)), creado: Date.now(), ejemplo: true }
+      { apto: '410', tipo: 'Inquilinos', responsable: 'Inquilino de ejemplo', tel: '+54 9 341 000 0000', personas: 4, desde: ymd(addDays(-3)), hasta: ymd(addDays(5)), creado: Date.now(), ejemplo: true },
+      { apto: '909', tipo: 'Familia', responsable: 'Familia del propietario (ejemplo)', tel: '+54 11 0000 0000', personas: 6, desde: ymd(addDays(-1)), hasta: ymd(addDays(12)), creado: Date.now(), ejemplo: true },
+      { apto: '1207', tipo: 'Familia', responsable: 'Hija del propietario (ejemplo)', tel: '+598 99 000 000', personas: 3, desde: ymd(addDays(40)), hasta: ymd(addDays(55)), creado: Date.now(), ejemplo: true }
     ],
     comunicados: [
       { titulo: 'Normas del gimnasio y del cowork para el verano', texto: 'Desde diciembre, el gimnasio y el cowork se reservan por la app o en recepción. Los menores usan el gimnasio acompañados por un adulto.', etiqueta: 'Importante', fecha: ymd(addDays(-2)), creado: Date.now(), ejemplo: true },
@@ -346,6 +367,9 @@ async function wipe() {
 document.addEventListener('click', async (e) => {
   const b = e.target.closest('[data-a]'); if (!b) return; const a = b.dataset.a, id = b.dataset.id;
   if (a === 'loginRol') { ui.loginRol = b.dataset.r; ui.loginErr = ''; render(); }
+  else if (a === 'look') { lookModal(); }
+  else if (a === 'lookMode') { setLook(b.dataset.v, null); lookModal(); }
+  else if (a === 'lookTheme') { setLook(null, b.dataset.v); lookModal(); }
   else if (a === 'logout') { confirmBox('¿Salir de la app?', 'Salir', async () => { await signOut(auth); }); }
   else if (a === 'tab') { ui.tab = b.dataset.t; go(); }
   else if (a === 'space') { ui.space = b.dataset.s; render(); }
@@ -403,7 +427,7 @@ document.addEventListener('submit', async (e) => {
     else if (k === 'comunicado') { await addDoc(collection(db, 'comunicados'), { titulo: String(fd.get('titulo')).trim(), etiqueta: fd.get('etiqueta'), texto: String(fd.get('texto')).trim(), fecha: today(), creado: Date.now() }); toast('Comunicado publicado'); }
     else if (k === 'registro') {
       const apto = String(fd.get('apto')).trim(); const det = String(fd.get('detalle') || '').trim();
-      if (!validApto(apto)) { toast('Apartamento inválido (ej.: 101 a 1706)'); if (btn) btn.disabled = false; return; }
+      if (!validApto(apto)) { toast('Apartamento inválido (del 107 al 1712)'); if (btn) btn.disabled = false; return; }
       if (ui.regMode === 'aviso') { await addDoc(collection(db, 'avisos'), { apto, tipo: ui.regKind, detalle: det, estado: ui.regKind === 'Paquete' ? 'Para retirar' : 'Informado', creado: Date.now() }); toast('Aviso enviado al apto ' + apto); }
       else { await addDoc(collection(db, 'pedidos'), { apto, tipo: ui.regKind, detalle: det, origen: 'Teléfono', estado: 'Pendiente', nota: '', creado: Date.now() }); toast('Pedido del apto ' + apto + ' registrado'); }
     }
@@ -424,7 +448,7 @@ document.addEventListener('submit', async (e) => {
 
 async function doLogin(fd) {
   const rol = ui.loginRol; const apto = String(fd.get('apto') || '').trim(); const codigo = String(fd.get('codigo') || '');
-  if (rol === 'vecino' && !validApto(apto)) { ui.loginErr = 'Ese número de apartamento no existe en la torre (101 a 1706).'; render(); return; }
+  if (rol === 'vecino' && !validApto(apto)) { ui.loginErr = 'Ese número de apartamento no existe en la torre (del 107 al 1712: piso + 07 a 12).'; render(); return; }
   const email = emailFor(rol, apto);
   ui.busy = true; ui.loginErr = ''; render();
   try {
