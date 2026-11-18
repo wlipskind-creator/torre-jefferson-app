@@ -1,0 +1,13 @@
+rules_version = '2';
+// Torre Jefferson · Reglas de Storage para los videos (usar cuando se pase al plan Blaze)
+service firebase.storage {
+  match /b/{bucket}/o {
+    function em() { return request.auth != null ? request.auth.token.email : ''; }
+    match /novedades/{novedad}/{file} {
+      allow create: if (em() == 'portero@torrejefferson.app' || em() == 'encargado@torrejefferson.app')
+                    && request.resource.size < 50 * 1024 * 1024
+                    && request.resource.contentType.matches('video/.*');
+      allow read: if em() == 'encargado@torrejefferson.app' || em() == 'comision@torrejefferson.app';
+    }
+  }
+}
