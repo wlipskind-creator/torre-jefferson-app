@@ -1,0 +1,114 @@
+rules_version = '2';
+// Torre Jefferson · Reglas de seguridad de Firestore (piloto)
+// El rol sale del usuario con que se ingresa:
+//   apto1207@torrejefferson.app → vecino del 1207
+//   portero@ / encargado@ / recepcion@ / comision@torrejefferson.app → personal
+service cloud.firestore {
+  match /databases/{database}/documents {
+
+    function signedIn() { return request.auth != null && request.auth.token.email != null; }
+    function em() { return request.auth.token.email; }
+    function isApto(a) { return signedIn() && em() == 'apto' + a + '@torrejefferson.app'; }
+    function isPortero() { return signedIn() && em() == 'portero@torrejefferson.app'; }
+    function isEncargado() { return signedIn() && em() == 'encargado@torrejefferson.app'; }
+    function isComision() { return signedIn() && em() == 'comision@torrejefferson.app'; }
+    function isRecepcion() { return signedIn() && em() == 'recepcion@torrejefferson.app'; }
+    function isPorteria() { return isPortero() || isEncargado() || isRecepcion(); }
+    function isFicha() { return isEncargado() || isRecepcion(); }
+
+    // Reservas: todos ven la ocupación; el vecino reserva y cancela las suyas; portería todo.
+    match /reservas/{id} {
+      allow read: if signedIn();
+      allow create: if isApto(request.resource.data.apto) || isPorteria();
+      allow delete: if isApto(resource.data.apto) || isPorteria();
+    }
+
+    // Pedidos: el vecino crea y ve los suyos; portería los gestiona.
+    match /pedidos/{id} {
+      allow read: if isApto(resource.data.apto) || isPorteria();
+      allow create: if (isApto(request.resource.data.apto) && request.resource.data.estado == 'Pendiente') || isPorteria();
+      allow update: if isPorteria();
+      allow delete: if isEncargado();
+    }
+
+    // Avisos: portería avisa; el vecino ve los suyos y solo puede marcarlos "Retirado".
+    match /avisos/{id} {
+      allow read: if isApto(resource.data.apto) || isPorteria();
+      allow create: if isPorteria();
+      allow update: if isPorteria()
+        || (isApto(resource.data.apto)
+            && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['estado'])
+            && request.resource.data.estado == 'Retirado');
+      allow delete: if isEncargado();
+    }
+
+    // Ocupantes de temporada: cada propietario los de su apartamento; portería ve todos.
+    match /ocupantes/{id} {
+      allow read: if isApto(resource.data.apto) || isPorteria();
+      allow create: if isApto(request.resource.data.apto) || isPorteria();
+      allow delete: if isApto(resource.data.apto) || isPorteria();
+    }
+
+    // Comunicados: todos leen; publica la comisión (el encargado solo carga los de ejemplo).
+    match /comunicados/{id} {
+      allow read: if signedIn();
+      allow create: if isComision() || (isEncargado() && request.resource.data.ejemplo == true);
+      allow delete: if isComision() || isEncargado();
+    }
+
+    // Novedades de portería: registra portería; leen portería y comisión.
+    match /novedades/{id} {
+      allow read: if isPorteria() || isComision();
+      allow create, update: if isPorteria();
+      allow delete: if isEncargado();
+    }
+
+    // Observaciones de la prueba: cualquiera con usuario anota y lee.
+    match /observaciones/{id} {
+      allow read, create: if signedIn();
+      allow delete: if isEncargado();
+    }
+
+    // ---------- Etapa 1: operativa de recepción ----------
+    // Ficha del apartamento: la cargan el encargado y recepción; portería consulta; cada vecino ve la suya.
+    match /unidades/{apto} {
+      allow read: if isPorteria() || isApto(apto);
+      allow write: if isFicha();
+    }
+    match /residentes/{id} {
+      allow read: if isPorteria() || isApto(resource.data.apto);
+      allow create, update, delete: if isFicha();
+    }
+    match /vehiculos/{id} {
+      allow read: if isPorteria() || isApto(resource.data.apto);
+      allow create, update, delete: if isFicha();
+    }
+    // Autorizaciones de ingreso: portería las crea y registra el ingreso; el encargado y recepción las borran.
+    match /autorizaciones/{id} {
+      allow read: if isPorteria() || isApto(resource.data.apto);
+      allow create, update: if isPorteria();
+      allow delete: if isFicha();
+    }
+    // Tareas de recepción: el encargado arma la lista; portería las marca.
+    match /tareas/{id} {
+      allow read: if isPorteria();
+      allow write: if isEncargado();
+    }
+    match /tareasHechas/{id} {
+      allow read, create, delete: if isPorteria();
+    }
+    // Llaves: el encargado arma el tablero; portería presta, devuelve y controla.
+    match /llaves/{id} {
+      allow read, update: if isPorteria();
+      allow create, delete: if isEncargado();
+    }
+    match /llavesMov/{id} {
+      allow read, create: if isPorteria();
+      allow delete: if isEncargado();
+    }
+    match /llavesControl/{id} {
+      allow read, create: if isPorteria();
+      allow delete: if isEncargado();
+    }
+  }
+}

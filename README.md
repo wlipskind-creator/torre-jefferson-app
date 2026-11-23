@@ -15,16 +15,26 @@ App web instalable para la Torre Jefferson: reservas de gimnasio y cowork, pedid
 3. **Publicar en Netlify**
    Netlify → *Add new site → Import an existing project → GitHub* → elegir `torre-jefferson-app` → sin comando de build, carpeta de publicación `.` → *Deploy*.
 4. **Reservar los usuarios del personal (importante)**
-   Apenas esté publicada, entrar una vez como **Portero**, otra como **Encargado** y otra como **Comisión** con el código de prueba. Así esas cuentas quedan creadas con el código correcto.
+   Apenas esté publicada, entrar una vez como **Portero**, **Encargado**, **Recepción** y **Comisión** con el código de prueba. Así esas cuentas quedan creadas con el código correcto.
 5. **Cargar los datos de ejemplo**
    Entrar como **Encargado** → pestaña **Datos de prueba** → *Cargar datos de ejemplo*.
+
+## Etapa 1 · Operativa de recepción
+
+- **Apartamentos:** tablero de la torre (107 a 1712) y ficha por unidad: estado, residentes, vehículos, autorizaciones e historial.
+- **Autorizaciones de ingreso** con fecha de fin o de una sola vez.
+- **Vehículos:** listado para seguridad del complejo (copiar o imprimir).
+- **Tareas por turno** (Mañana 6–14, Tarde 14–22, Noche 22–6) con tilde, quién y comentario.
+- **Llaves:** préstamos, devoluciones y control de inventario.
+- **Reservas:** gimnasio, cowork, sauna y sala de masajes.
+- Las fichas las cargan el **Encargado** y **Recepción**; portería las consulta.
 
 ## Cómo se ingresa
 
 | Quién | Usuario | Código |
 |---|---|---|
 | Vecino | Número de apartamento (107 a 1712: piso + 07 a 12) | Código de prueba (`config.js`) |
-| Portero / Encargado / Comisión | Se elige el rol en la pantalla de ingreso | El mismo código |
+| Portero / Encargado / Recepción / Comisión | Se elige el rol en la pantalla de ingreso | El mismo código |
 
 La primera vez que alguien entra con un apartamento, la cuenta se crea sola con el código de prueba.
 

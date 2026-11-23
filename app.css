@@ -161,3 +161,31 @@ a{color:var(--ac)}
 .help-b p{margin:0}
 .steps{margin:0;padding-left:22px;display:flex;flex-direction:column;gap:6px}
 .login h2{display:flex;align-items:center;gap:8px}
+
+.seg4{grid-template-columns:repeat(4,minmax(0,1fr))}
+@media (max-width:520px){.seg4{grid-template-columns:repeat(2,minmax(0,1fr))}}
+.building{display:flex;flex-direction:column;gap:6px;overflow-x:auto}
+.floor{display:grid;grid-template-columns:64px repeat(6,minmax(70px,1fr));gap:6px;align-items:stretch}
+.floor-n{font-size:12px;font-weight:700;color:var(--muted);display:flex;align-items:center}
+.unit{min-height:58px;border-radius:10px;border:2px solid var(--line);background:var(--card);display:flex;flex-direction:column;align-items:center;justify-content:center;gap:1px;padding:4px;color:var(--ink)}
+.unit b{font-size:15px}.unit small{font-size:11px;font-weight:600;color:var(--muted)}.unit i{font-style:normal;font-size:10px;color:var(--muted)}
+.unit.u-oc{background:var(--ac-l);border-color:var(--ac)}.unit.u-oc small{color:var(--ac-d)}
+.unit.u-va{background:var(--off);border-style:dashed}
+.unit.mini{display:inline-block;width:16px;height:16px;min-height:0;padding:0;border-radius:4px;vertical-align:middle;margin:0 4px 0 10px}
+.legend{font-size:13px;color:var(--muted);display:flex;align-items:center;flex-wrap:wrap}
+.plate{font-family:ui-monospace,Menlo,Consolas,monospace;letter-spacing:.04em}
+.item.off{opacity:.6}
+.check{flex-direction:row;align-items:flex-start;gap:10px;font-weight:500}
+.check input{width:22px;min-height:22px;height:22px;flex:none;margin-top:1px}
+.ticks{display:flex;flex-wrap:wrap;align-items:center;gap:8px 10px}
+.tick{width:44px;height:44px;border-radius:12px;border:2px solid var(--field);background:var(--field-bg);font-size:22px;font-weight:800;color:var(--on-ac)}
+.tick.done{background:var(--ac);border-color:var(--ac)}
+.tick-who{margin-right:8px}
+@media (max-width:560px){
+  .floor{grid-template-columns:44px repeat(6,minmax(0,1fr));gap:4px}
+  .floor-n{font-size:10px}
+  .unit{min-height:46px;padding:2px;border-radius:8px}
+  .unit b{font-size:13px}
+  .unit small,.unit i{display:none}
+  .card .building{margin:0 -6px}
+}
