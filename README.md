@@ -29,6 +29,14 @@ App web instalable para la Torre Jefferson: reservas de gimnasio y cowork, pedid
 - **Reservas:** gimnasio, cowork, sauna y sala de masajes.
 - Las fichas las cargan el **Encargado** y **Recepción**; portería las consulta.
 
+## Etapa 2 · Gestión interna (pestaña "Gestión")
+
+- **Proveedores de servicio:** visitas con periodicidad y aviso de vencidas.
+- **Mucamas:** servicios contratados por días y hora, visitas puntuales y agenda diaria imprimible.
+- **Turnos del personal:** planilla semanal de recepción y mucamas (la asigna el encargado).
+- **Caja chica:** gastos, reposiciones y saldo; la comisión la consulta.
+- **Materiales de limpieza:** stock, entregas, ingresos y alerta de reposición.
+
 ## Cómo se ingresa
 
 | Quién | Usuario | Código |

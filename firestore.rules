@@ -110,5 +110,51 @@ service cloud.firestore {
       allow read, create: if isPorteria();
       allow delete: if isEncargado();
     }
+
+    // ---------- Etapa 2: gestión interna ----------
+    // Proveedores: el encargado y recepción los administran; portería registra las visitas.
+    match /proveedores/{id} {
+      allow read: if isPorteria();
+      allow write: if isFicha();
+    }
+    match /visitasProv/{id} {
+      allow read, create: if isPorteria();
+      allow delete: if isFicha();
+    }
+    // Mucamas: servicios contratados (encargado y recepción); agenda puntual y "hecho" (portería).
+    match /servicioMucama/{id} {
+      allow read: if isPorteria();
+      allow write: if isFicha();
+    }
+    match /agendaMucama/{id} {
+      allow read, create, delete: if isPorteria();
+    }
+    match /mucamaHechos/{id} {
+      allow read, create, delete: if isPorteria();
+    }
+    // Personal y turnos: los asigna el encargado; portería consulta.
+    match /personal/{id} {
+      allow read: if isPorteria();
+      allow write: if isEncargado();
+    }
+    match /turnosPersonal/{id} {
+      allow read: if isPorteria();
+      allow write: if isEncargado();
+    }
+    // Caja chica: portería registra; la comisión consulta; solo el encargado borra.
+    match /cajaMov/{id} {
+      allow read: if isPorteria() || isComision();
+      allow create: if isPorteria();
+      allow delete: if isEncargado();
+    }
+    // Materiales de limpieza: el encargado arma la lista; portería registra entregas e ingresos.
+    match /materiales/{id} {
+      allow read, update: if isPorteria();
+      allow create, delete: if isEncargado();
+    }
+    match /matMov/{id} {
+      allow read, create: if isPorteria();
+      allow delete: if isEncargado();
+    }
   }
 }

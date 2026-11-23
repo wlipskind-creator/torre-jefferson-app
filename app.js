@@ -1,7 +1,7 @@
 // Torre Jefferson · App (piloto) — Firebase Auth + Firestore
 import { initializeApp } from "https://www.gstatic.com/firebasejs/10.14.1/firebase-app.js";
 import { getAuth, signInWithEmailAndPassword, createUserWithEmailAndPassword, signOut, onAuthStateChanged, setPersistence, browserLocalPersistence } from "https://www.gstatic.com/firebasejs/10.14.1/firebase-auth.js";
-import { getFirestore, collection, query, where, onSnapshot, addDoc, updateDoc, deleteDoc, doc, writeBatch, getDocs, setDoc } from "https://www.gstatic.com/firebasejs/10.14.1/firebase-firestore.js";
+import { getFirestore, collection, query, where, onSnapshot, addDoc, updateDoc, deleteDoc, doc, writeBatch, getDocs, setDoc, increment } from "https://www.gstatic.com/firebasejs/10.14.1/firebase-firestore.js";
 
 const CFG = window.TJ_CONFIG;
 const fb = initializeApp(CFG.firebaseConfig);
@@ -61,7 +61,7 @@ const ROLES = { vecino: 'Vecino', portero: 'Portero', encargado: 'Encargado de p
 const PED_TIPOS = ['Autorizar visita', 'Aviso de llegada o salida', 'Reportar un problema', 'Otro pedido'];
 const AV_TIPOS = ['Paquete', 'Visita en recepción', 'Delivery', 'Otro'];
 const NOV_TIPOS = ['Incidente', 'Rotura', 'Visita / proveedor', 'Otro'];
-const COLS = ['reservas', 'pedidos', 'avisos', 'ocupantes', 'comunicados', 'novedades', 'observaciones', 'unidades', 'residentes', 'vehiculos', 'autorizaciones', 'tareas', 'tareasHechas', 'llaves', 'llavesMov', 'llavesControl'];
+const COLS = ['reservas', 'pedidos', 'avisos', 'ocupantes', 'comunicados', 'novedades', 'observaciones', 'unidades', 'residentes', 'vehiculos', 'autorizaciones', 'tareas', 'tareasHechas', 'llaves', 'llavesMov', 'llavesControl', 'proveedores', 'visitasProv', 'servicioMucama', 'agendaMucama', 'mucamaHechos', 'personal', 'turnosPersonal', 'cajaMov', 'materiales', 'matMov'];
 
 function validApto(a) { const n = parseInt(a, 10); if (!/^\d{3,4}$/.test(a)) return false; const piso = Math.floor(n / 100), u = n % 100; return piso >= 1 && piso <= 17 && u >= 7 && u <= 12; }
 function emailFor(rol, apto) { return (rol === 'vecino' ? 'apto' + apto : rol) + '@' + CFG.dominio; }
@@ -78,7 +78,7 @@ let who = null;
 const S = {}; COLS.forEach((c) => (S[c] = []));
 const loaded = new Set();
 let unsubs = [];
-const ui = { tab: null, space: 'gym', day: 0, regMode: 'aviso', regKind: 'Paquete', pedKind: 'Autorizar visita', bitDate: today(), ocKind: 'Familia', novKind: 'Incidente', ficha: null, tTurno: null, tFecha: null, loginRol: 'vecino', loginErr: '', busy: false };
+const ui = { tab: null, space: 'gym', day: 0, regMode: 'aviso', regKind: 'Paquete', pedKind: 'Autorizar visita', bitDate: today(), ocKind: 'Familia', novKind: 'Incidente', ficha: null, tTurno: null, tFecha: null, gsub: null, mFecha: null, semana: null, area: null, cMes: null, cTipo: 'Gasto', loginRol: 'vecino', loginErr: '', busy: false };
 const videoUrls = {};
 
 function listen() {
@@ -88,12 +88,15 @@ function listen() {
   const all = (c) => collection(db, c);
   let plan = {};
   if (who.rol === 'vecino') plan = { reservas: all('reservas'), pedidos: mine('pedidos'), avisos: mine('avisos'), ocupantes: mine('ocupantes'), comunicados: all('comunicados'), observaciones: all('observaciones') };
-  else if (who.rol === 'comision') plan = { comunicados: all('comunicados'), novedades: all('novedades'), observaciones: all('observaciones') };
+  else if (who.rol === 'comision') plan = { comunicados: all('comunicados'), novedades: all('novedades'), observaciones: all('observaciones'), cajaMov: all('cajaMov') };
   else {
     plan = { reservas: all('reservas'), pedidos: all('pedidos'), avisos: all('avisos'), ocupantes: all('ocupantes'), comunicados: all('comunicados'), novedades: all('novedades'), observaciones: all('observaciones'),
       unidades: all('unidades'), residentes: all('residentes'), vehiculos: all('vehiculos'), autorizaciones: all('autorizaciones'), tareas: all('tareas'),
       tareasHechas: query(collection(db, 'tareasHechas'), where('fecha', '>=', ymd(addDays(-30)))), llaves: all('llaves'),
-      llavesMov: query(collection(db, 'llavesMov'), where('ts', '>=', Date.now() - 30 * 86400000)), llavesControl: query(collection(db, 'llavesControl'), where('ts', '>=', Date.now() - 30 * 86400000)) };
+      llavesMov: query(collection(db, 'llavesMov'), where('ts', '>=', Date.now() - 30 * 86400000)), llavesControl: query(collection(db, 'llavesControl'), where('ts', '>=', Date.now() - 30 * 86400000)),
+      proveedores: all('proveedores'), visitasProv: all('visitasProv'), servicioMucama: all('servicioMucama'), agendaMucama: query(collection(db, 'agendaMucama'), where('fecha', '>=', ymd(addDays(-30)))),
+      mucamaHechos: query(collection(db, 'mucamaHechos'), where('fecha', '>=', ymd(addDays(-30)))), personal: all('personal'), turnosPersonal: query(collection(db, 'turnosPersonal'), where('fecha', '>=', ymd(addDays(-60)))),
+      cajaMov: all('cajaMov'), materiales: all('materiales'), matMov: query(collection(db, 'matMov'), where('ts', '>=', Date.now() - 60 * 86400000)) };
   }
   Object.keys(plan).forEach((c) => {
     unsubs.push(onSnapshot(plan[c], (snap) => {
@@ -150,10 +153,10 @@ function tabsFor() {
     const pend = count(S.avisos, (a) => a.estado === 'Para retirar');
     return [['inicio', 'Inicio', 'home', pend], ['reservas', 'Reservas', 'cal'], ['porteria', 'Portería', 'chat'], ['ocupantes', 'Ocupantes', 'users'], ['comunicados', 'Comunicados', 'mega'], ['ayuda', 'Ayuda', 'help']];
   }
-  if (who.rol === 'comision') return [['comunicados', 'Comunicados', 'mega'], ['novedades', 'Novedades', 'video'], ['observaciones', 'Observaciones', 'list', S.observaciones.length], ['ayuda', 'Ayuda', 'help']];
+  if (who.rol === 'comision') return [['comunicados', 'Comunicados', 'mega'], ['novedades', 'Novedades', 'video'], ['caja', 'Caja chica', 'list'], ['observaciones', 'Observaciones', 'list', S.observaciones.length], ['ayuda', 'Ayuda', 'help']];
   const p = count(S.pedidos, (x) => x.estado !== 'Atendido'); const n = count(S.novedades, (x) => x.estado !== 'Resuelta');
   const fuera = count(S.llaves, (l) => l.estado === 'Prestada');
-  const t = [['panel', 'Panel', 'desk', p], ['novedades', 'Novedades', 'video', n], ['aptos', 'Apartamentos', 'home'], ['autorizaciones', 'Autorizaciones', 'shield'], ['vehiculos', 'Vehículos', 'list'], ['tareas', 'Tareas', 'list'], ['llaves', 'Llaves', 'key', fuera], ['reservasP', 'Reservas', 'cal']];
+  const t = [['panel', 'Panel', 'desk', p], ['novedades', 'Novedades', 'video', n], ['aptos', 'Apartamentos', 'home'], ['autorizaciones', 'Autorizaciones', 'shield'], ['vehiculos', 'Vehículos', 'list'], ['tareas', 'Tareas', 'list'], ['llaves', 'Llaves', 'key', fuera], ['reservasP', 'Reservas', 'cal'], ['gestion', 'Gestión', 'book', count(S.proveedores, (x) => provEstado(x).k === 'venc') + count(S.materiales, (m) => (+m.stock || 0) <= (+m.minimo || 0))]];
   if (who.rol === 'encargado') t.push(['bitacora', 'Bitácora diaria', 'book'], ['observaciones', 'Observaciones', 'list', S.observaciones.length], ['datos', 'Datos de prueba', 'list']);
   t.push(['ayuda', 'Ayuda', 'help']);
   return t;
@@ -278,6 +281,10 @@ function bitSheet(date) {
   const lm = S.llavesMov.filter((m) => on(m.ts)).sort((a, b) => a.ts - b.ts);
   const lc = S.llavesControl.filter((m) => on(m.ts)).sort((a, b) => a.ts - b.ts);
   const ing = S.autorizaciones.filter((x) => on(x.usada)).sort((a, b) => a.usada - b.usada);
+  const vp = S.visitasProv.filter((v) => v.fecha === date);
+  const cm = S.cajaMov.filter((m) => m.fecha === date);
+  const mm = S.matMov.filter((m) => on(m.ts)).sort((a, b) => a.ts - b.ts);
+  const mh = S.mucamaHechos.filter((h) => h.fecha === date);
   const t = (head, rows) => rows.length ? '<table><tr>' + head.map((h) => '<th>' + h + '</th>').join('') + '</tr>' + rows.map((r) => '<tr>' + r.map((c) => '<td>' + esc(c) + '</td>').join('') + '</tr>').join('') + '</table>' : '<p class="empty">Sin registros.</p>';
   return '<div class="sheet"><div class="item-h sheet-top"><div><div class="sheet-kick">Torre Jefferson</div><div style="font-size:20px;font-weight:800">Bitácora de portería</div></div><div style="text-align:right;font-size:13px">' + esc(dlabel(date)) + '<br>Encargado de portería</div></div>' +
     '<div class="stats"><div class="stat"><b>' + nov.length + '</b><span>novedades</span></div><div class="stat"><b>' + count(nov, (n) => n.estado !== 'Resuelta') + '</b><span>sin resolver</span></div><div class="stat"><b>' + ped.length + '</b><span>pedidos de vecinos</span></div><div class="stat"><b>' + av.length + '</b><span>avisos enviados</span></div><div class="stat"><b>' + res.length + '</b><span>reservas</span></div></div>' +
@@ -288,6 +295,10 @@ function bitSheet(date) {
     '<h3>Tareas de recepción realizadas</h3>' + t(['Turno', 'Hora', 'Tarea', 'Quién', 'Comentario'], th.map((h) => [TURNOS[h.turno] || '', hhmm(h.ts), h.tarea + (h.n > 1 ? ' (' + h.n + ')' : ''), h.quien, h.comentario || ''])) +
     '<h3>Ingresos autorizados</h3>' + t(['Hora', 'Apto', 'Persona', 'Tipo', 'Registró'], ing.map((x) => [hhmm(x.usada), x.apto, x.nombre, x.tipo, x.porteroIngreso || ''])) +
     '<h3>Llaves</h3>' + t(['Hora', 'Movimiento', 'Llave', 'Persona', 'Registró'], lm.map((m) => [hhmm(m.ts), m.accion, m.llave, m.persona, m.quien])) +
+    '<h3>Visitas de proveedores</h3>' + t(['Proveedor', 'Trabajo', 'Registró'], vp.map((v) => [v.proveedor, v.trabajo || '', v.quien || ''])) +
+    '<h3>Caja chica</h3>' + t(['Tipo', 'Concepto', 'Monto', 'Registró'], cm.map((m) => [m.tipo, m.concepto, money(m.monto), m.quien || ''])) +
+    '<h3>Materiales de limpieza</h3>' + t(['Hora', 'Movimiento', 'Material', 'Cantidad', 'Destino'], mm.map((m) => [hhmm(m.ts), m.tipo, m.material, String(m.cantidad), m.destino || ''])) +
+    '<p class="muted">Servicios de mucama realizados: ' + mh.length + '.</p>' +
     (lc.length ? t(['Control', 'Quién', 'Resultado'], lc.map((c) => [hhmm(c.ts), c.quien, c.faltantes.length ? 'Faltaban: ' + c.faltantes.join(', ') : 'Todo en orden'])) : '') +
     '<div class="item-h muted" style="font-size:12px;margin-top:16px"><span>Firma del encargado: ______________________</span><span>Generada ' + esc(when(Date.now())) + '</span></div></div>';
 }
@@ -301,7 +312,7 @@ VIEWS.observaciones = () => {
 
 VIEWS.datos = () => {
   const n = COLS.reduce((s, c) => s + S[c].length, 0);
-  return '<div class="grid"><div class="card"><h2>Datos de ejemplo</h2><span>Carga reservas, pedidos, avisos, ocupantes, comunicados, novedades, fichas de apartamentos, autorizaciones, tareas y llaves de ejemplo.</span><span class="muted">Registros actuales: ' + n + '.</span><div><button class="btn" data-a="seed"' + (ui.busy ? ' disabled' : '') + '>Cargar datos de ejemplo</button></div></div>' +
+  return '<div class="grid"><div class="card"><h2>Datos de ejemplo</h2><span>Carga datos de ejemplo de todas las secciones: reservas, pedidos, avisos, fichas, autorizaciones, tareas, llaves, proveedores, mucamas, turnos, caja chica y materiales.</span><span class="muted">Registros actuales: ' + n + '.</span><div><button class="btn" data-a="seed"' + (ui.busy ? ' disabled' : '') + '>Cargar datos de ejemplo</button></div></div>' +
     '<div class="card"><h2>Empezar de cero</h2><span>Borra todos los registros de la prueba (no borra usuarios ni observaciones).</span><div><button class="btn danger" data-a="wipe"' + (ui.busy ? ' disabled' : '') + '>Borrar datos de prueba</button></div></div></div>';
 };
 
@@ -531,6 +542,8 @@ document.addEventListener('change', (e) => {
   const c = e.target.dataset.c2; if (!c) return;
   if (c === 'tFecha') ui.tFecha = e.target.value || today();
   if (c === 'tTurno') ui.tTurno = +e.target.value;
+  if (c === 'mFecha') ui.mFecha = e.target.value || today();
+  if (c === 'cMes') ui.cMes = e.target.value || today().slice(0, 7);
   e.target.blur(); render();
 });
 document.addEventListener('submit', (e) => {
@@ -577,6 +590,206 @@ document.addEventListener('click', (e) => {
 });
 
 
+/* =====================================================================
+   ETAPA 2 · Gestión interna
+   Proveedores de servicio, servicio de mucamas, turnos del personal,
+   caja chica y materiales de limpieza.
+   ===================================================================== */
+const DIAS = ['Dom', 'Lun', 'Mar', 'Mié', 'Jue', 'Vie', 'Sáb'];
+const GSUBS = [['prov', 'Proveedores'], ['muc', 'Mucamas'], ['turnos', 'Turnos del personal'], ['caja', 'Caja chica'], ['mat', 'Materiales']];
+const money = (n) => '$ ' + (Math.round((+n || 0) * 100) / 100).toLocaleString('es-UY', { minimumFractionDigits: 0, maximumFractionDigits: 2 });
+const daysBetween = (a, b) => Math.round((new Date(b + 'T12:00') - new Date(a + 'T12:00')) / 86400000);
+const addTo = (s, n) => { const d = new Date(s + 'T12:00'); d.setDate(d.getDate() + n); return ymd(d); };
+const isEnc = () => who && who.rol === 'encargado';
+
+VIEWS.gestion = () => {
+  if (!ui.gsub) ui.gsub = 'prov';
+  const nav = '<div class="pills no-print" role="tablist" style="margin-bottom:16px">' + GSUBS.map((g) => '<button class="pill' + (ui.gsub === g[0] ? ' on' : '') + '" data-b="gsub" data-v="' + g[0] + '">' + g[1] + gBadge(g[0]) + '</button>').join('') + '</div>';
+  return nav + ({ prov: vProv, muc: vMuc, turnos: vTurnos, caja: vCaja, mat: vMat })[ui.gsub]();
+};
+function gBadge(k) {
+  let n = 0;
+  if (k === 'prov') n = count(S.proveedores, (p) => provEstado(p).k === 'venc');
+  if (k === 'mat') n = count(S.materiales, (m) => (+m.stock || 0) <= (+m.minimo || 0));
+  return n ? ' <span class="badge">' + n + '</span>' : '';
+}
+
+/* ----- Proveedores de servicio ----- */
+function provUltima(p) { return S.visitasProv.filter((v) => v.provId === p.id).sort((a, b) => (b.fecha || '').localeCompare(a.fecha || ''))[0]; }
+function provEstado(p) {
+  const u = provUltima(p); const per = +p.periodicidad || 0;
+  if (!per) return { k: 'ok', t: u ? 'Sin periodicidad' : 'Sin visitas', prox: '' };
+  if (!u) return { k: 'venc', t: 'Sin visitas registradas', prox: '' };
+  const prox = addTo(u.fecha, per), d = daysBetween(today(), prox);
+  if (d < 0) return { k: 'venc', t: 'Vencida hace ' + (-d) + ' días', prox };
+  if (d <= 7) return { k: 'pronto', t: d === 0 ? 'Toca hoy' : 'Toca en ' + d + ' días', prox };
+  return { k: 'ok', t: 'Al día', prox };
+}
+function vProv() {
+  const cf = canFicha();
+  const ps = S.proveedores.slice().sort((a, b) => { const o = { venc: 0, pronto: 1, ok: 2 }; return o[provEstado(a).k] - o[provEstado(b).k] || a.nombre.localeCompare(b.nombre); });
+  return '<div class="hello"><h1>Proveedores de servicio</h1><span class="muted">Visitas periódicas: la app avisa cuando una está vencida o por vencer.</span></div>' +
+    '<div class="grid"><div class="card wide"><div class="item-h"><h2>Servicios</h2>' + (cf ? '<button class="btn sm" data-b="provNew">Agregar proveedor</button>' : '') + '</div>' +
+    (ps.length ? ps.map((p) => {
+      const e = provEstado(p), u = provUltima(p), vis = S.visitasProv.filter((v) => v.provId === p.id).sort((a, b) => (b.fecha || '').localeCompare(a.fecha || ''));
+      return '<div class="item"><div class="item-h"><span class="item-t">' + esc(p.servicio) + ' · ' + esc(p.nombre) + '</span><span class="tag ' + (e.k === 'venc' ? 't-bad' : e.k === 'pronto' ? 't-warn' : 't-ok') + '">' + esc(e.t) + '</span></div>' +
+        '<span class="muted">' + (p.periodicidad ? 'Cada ' + p.periodicidad + ' días' : 'Sin periodicidad fija') + (p.telefono ? ' · Tel. ' + esc(p.telefono) : '') + (u ? ' · última visita ' + fdate(u.fecha) : '') + (e.prox ? ' · próxima ' + fdate(e.prox) : '') + '</span>' +
+        (p.notas ? '<span class="muted">' + esc(p.notas) + '</span>' : '') +
+        '<div class="row"><button class="btn sm" data-b="visNew" data-id="' + p.id + '">Registrar visita</button>' + (cf ? '<button class="btn ghost sm" data-b="provEdit" data-id="' + p.id + '">Editar</button><button class="btn danger sm" data-b="del" data-col="proveedores" data-id="' + p.id + '">Borrar</button>' : '') + '</div>' +
+        (vis.length ? '<details class="mini-hist"><summary>Historial (' + vis.length + ')</summary>' + vis.slice(0, 12).map((v) => '<div class="muted">' + fdate(v.fecha) + ' · ' + esc(v.trabajo || 'Visita') + (v.quien ? ' · registró ' + esc(v.quien) : '') + '</div>').join('') + '</details>' : '') + '</div>';
+    }).join('') : '<span class="empty">No hay proveedores cargados.</span>') + '</div></div>';
+}
+function provForm(p) {
+  p = p || { periodicidad: 30 };
+  modal('<h2>' + (p.id ? 'Editar' : 'Nuevo') + ' proveedor</h2><div class="row"><label>Servicio<input name="servicio" required value="' + esc(p.servicio || '') + '" placeholder="Ej.: Ascensores"></label><label>Empresa o técnico<input name="nombre" required value="' + esc(p.nombre || '') + '"></label></div>' +
+    '<div class="row"><label>Teléfono<input name="telefono" type="tel" value="' + esc(p.telefono || '') + '"></label><label>Cada cuántos días<input name="periodicidad" type="number" min="0" value="' + (p.periodicidad || 0) + '"></label></div>' +
+    '<label>Notas<input name="notas" value="' + esc(p.notas || '') + '" placeholder="Ej.: contrato mensual; avisar a la administración"></label><div class="row"><button type="button" class="btn ghost" data-cancel="1">Cancelar</button><button class="btn">Guardar</button></div>',
+    (fd) => { const d = { servicio: val(fd, 'servicio'), nombre: val(fd, 'nombre'), telefono: val(fd, 'telefono'), periodicidad: +fd.get('periodicidad') || 0, notas: val(fd, 'notas') };
+      return run(() => p.id ? updateDoc(doc(db, 'proveedores', p.id), d) : addDoc(collection(db, 'proveedores'), { ...d, creado: Date.now() }), 'Proveedor guardado'); });
+}
+
+/* ----- Servicio de mucamas ----- */
+function mucAgenda(fecha) {
+  const dow = new Date(fecha + 'T12:00').getDay();
+  const fijos = S.servicioMucama.filter((s) => s.activo !== false && (s.dias || []).includes(dow) && (!s.desde || s.desde <= fecha) && (!s.hasta || s.hasta >= fecha))
+    .map((s) => ({ key: 's:' + s.id, apto: s.apto, hora: s.hora, mucama: s.mucama, notas: s.notas, fijo: true }));
+  const extra = S.agendaMucama.filter((x) => x.fecha === fecha).map((x) => ({ key: 'x:' + x.id, id: x.id, apto: x.apto, hora: x.hora, mucama: x.mucama, notas: x.notas, fijo: false }));
+  return fijos.concat(extra).sort((a, b) => (a.hora || '').localeCompare(b.hora || '') || a.apto.localeCompare(b.apto, undefined, { numeric: true }))
+    .map((v) => ({ ...v, hecho: S.mucamaHechos.find((h) => h.fecha === fecha && h.key === v.key) }));
+}
+function mucSheet(fecha) {
+  const ag = mucAgenda(fecha);
+  return '<div class="sheet"><div class="item-h sheet-top"><div><div class="sheet-kick">Torre Jefferson</div><div style="font-size:20px;font-weight:800">Agenda de mucamas</div></div><div style="text-align:right;font-size:13px">' + esc(dlabel(fecha)) + '<br>' + ag.length + ' servicios</div></div>' +
+    (ag.length ? '<table><tr><th>Hora</th><th>Apto</th><th>Mucama</th><th>Notas</th><th class="no-print">Hecho</th><th class="print-only">✓</th></tr>' + ag.map((v) => '<tr><td><b>' + esc(v.hora || '') + '</b></td><td><b>' + esc(v.apto) + '</b></td><td>' + esc(v.mucama || '') + '</td><td>' + esc(v.notas || '') + (v.fijo ? '' : ' <span class="tag">puntual</span>') + '</td>' +
+      '<td class="no-print"><button class="tick' + (v.hecho ? ' done' : '') + '" data-b="mucTick" data-k="' + esc(v.key) + '" data-apto="' + esc(v.apto) + '"' + (v.hecho ? ' data-h="' + v.hecho.id + '"' : '') + ' aria-label="Hecho apto ' + esc(v.apto) + '">' + (v.hecho ? '✓' : '') + '</button>' + (!v.fijo ? ' <button class="btn ghost sm" data-b="del" data-col="agendaMucama" data-id="' + v.id + '">Quitar</button>' : '') + '</td><td class="print-only">☐</td></tr>').join('') + '</table>' : '<p class="empty">No hay servicios para este día.</p>') + '</div>';
+}
+function vMuc() {
+  if (!ui.mFecha) ui.mFecha = today();
+  const cf = canFicha();
+  const sv = S.servicioMucama.slice().sort((a, b) => a.apto.localeCompare(b.apto, undefined, { numeric: true }));
+  return '<div class="hello no-print"><h1>Servicio de mucamas</h1><span class="muted">Qué apartamentos tienen el servicio y la agenda del día para imprimir.</span></div>' +
+    '<div class="card no-print" style="margin-bottom:16px"><div class="row" style="align-items:flex-end"><label>Día<input type="date" data-c2="mFecha" value="' + ui.mFecha + '"></label><button class="btn ghost" data-b="mucExtra">Agregar visita puntual</button><button class="btn dark" data-a="print">' + ic('print', 18) + 'Imprimir agenda</button></div></div>' +
+    mucSheet(ui.mFecha) +
+    '<div class="card no-print" style="margin-top:16px"><div class="item-h"><h2>Servicios contratados</h2>' + (cf ? '<button class="btn sm" data-b="mucNew">Agregar</button>' : '') + '</div>' +
+    (sv.length ? sv.map((s) => '<div class="item' + (s.activo === false ? ' off' : '') + '"><div class="item-h"><span class="item-t">Apto ' + esc(s.apto) + ' · ' + esc(s.hora || '') + '</span><span class="tag">' + esc((s.dias || []).length === 7 ? 'Todos los días' : (s.dias || []).map((d) => DIAS[d]).join(' ')) + '</span></div><span class="muted">' + esc(s.mucama || 'Sin asignar') + (s.desde || s.hasta ? ' · del ' + fdate(s.desde) + ' al ' + fdate(s.hasta) : '') + (s.notas ? ' · ' + esc(s.notas) : '') + '</span>' +
+      (cf ? '<div class="row"><button class="btn ghost sm" data-b="mucEdit" data-id="' + s.id + '">Editar</button><button class="btn danger sm" data-b="del" data-col="servicioMucama" data-id="' + s.id + '">Quitar</button></div>' : '') + '</div>').join('') : '<span class="empty">Ningún apartamento tiene el servicio cargado.</span>') + '</div>';
+}
+const mucamas = () => S.personal.filter((p) => p.area === 'Mucamas' && p.activo !== false).map((p) => p.nombre);
+function mucForm(s) {
+  s = s || { dias: [1, 3, 5], hora: '10:00', activo: true };
+  const ms = mucamas();
+  modal('<h2>' + (s.id ? 'Editar' : 'Nuevo') + ' servicio de mucama</h2><div class="row"><label>Apartamento<input name="apto" inputmode="numeric" required value="' + esc(s.apto || '') + '"></label><label>Hora<input name="hora" type="time" required value="' + esc(s.hora || '10:00') + '"></label></div>' +
+    '<span style="font-size:14px;font-weight:600">Días</span><div class="pills">' + [1, 2, 3, 4, 5, 6, 0].map((d) => '<label class="pill check-pill"><input type="checkbox" name="d" value="' + d + '"' + ((s.dias || []).includes(d) ? ' checked' : '') + '> ' + DIAS[d] + '</label>').join('') + '</div>' +
+    '<label>Mucama' + (ms.length ? '<select name="mucama">' + opt([''].concat(ms), s.mucama || '') + '</select>' : '<input name="mucama" value="' + esc(s.mucama || '') + '" placeholder="Cargá el personal en Turnos">') + '</label>' +
+    '<div class="row"><label>Desde (opcional)<input name="desde" type="date" value="' + esc(s.desde || '') + '"></label><label>Hasta (opcional)<input name="hasta" type="date" value="' + esc(s.hasta || '') + '"></label></div>' +
+    '<label>Notas<input name="notas" value="' + esc(s.notas || '') + '" placeholder="Ej.: cambio de sábanas los viernes"></label><label class="check"><input type="checkbox" name="activo"' + (s.activo !== false ? ' checked' : '') + '> Servicio activo</label>' +
+    '<div class="row"><button type="button" class="btn ghost" data-cancel="1">Cancelar</button><button class="btn">Guardar</button></div>',
+    (fd) => { const ap = val(fd, 'apto'); if (!validApto(ap)) { toast('Apartamento inválido (del 107 al 1712)'); return false; }
+      const dias = fd.getAll('d').map(Number); if (!dias.length) { toast('Elegí al menos un día'); return false; }
+      const d = { apto: ap, hora: val(fd, 'hora'), dias, mucama: val(fd, 'mucama'), desde: val(fd, 'desde'), hasta: val(fd, 'hasta'), notas: val(fd, 'notas'), activo: !!fd.get('activo') };
+      return run(() => s.id ? updateDoc(doc(db, 'servicioMucama', s.id), d) : addDoc(collection(db, 'servicioMucama'), { ...d, creado: Date.now() }), 'Servicio guardado'); });
+}
+
+/* ----- Turnos del personal ----- */
+function lunes(s) { const d = new Date(s + 'T12:00'); const k = (d.getDay() + 6) % 7; d.setDate(d.getDate() - k); return ymd(d); }
+const TURNO_OPC = { 'Recepción': ['Mañana 6–14', 'Tarde 14–22', 'Noche 22–6', 'Libre', 'Licencia'], 'Mucamas': ['Mañana', 'Tarde', 'Libre', 'Licencia'] };
+function turnoClase(v) { return !v ? '' : /Libre/.test(v) ? 't-libre' : /Licencia/.test(v) ? 't-lic' : 't-trab'; }
+function vTurnos() {
+  if (!ui.semana) ui.semana = lunes(today());
+  if (!ui.area) ui.area = 'Recepción';
+  const dias = [0, 1, 2, 3, 4, 5, 6].map((k) => addTo(ui.semana, k));
+  const pers = S.personal.filter((p) => p.area === ui.area && p.activo !== false).sort((a, b) => a.nombre.localeCompare(b.nombre));
+  const cell = (p, f) => { const t = S.turnosPersonal.find((x) => x.personaId === p.id && x.fecha === f); const v = t ? t.valor : '';
+    return '<td>' + (isEnc() ? '<button class="tcell ' + turnoClase(v) + '" data-b="tCell" data-p="' + p.id + '" data-f="' + f + '">' + (esc(v) || '—') + '</button>' : '<span class="tcell ' + turnoClase(v) + '">' + (esc(v) || '—') + '</span>') + '</td>'; };
+  return '<div class="hello no-print"><h1>Turnos del personal</h1><span class="muted">' + (isEnc() ? 'Tocá una celda para asignar horario, día libre o licencia.' : 'Solo lectura: los turnos los asigna el encargado.') + '</span></div>' +
+    '<div class="card no-print" style="margin-bottom:16px"><div class="row" style="align-items:flex-end"><div class="seg" style="flex:2 1 260px">' + ['Recepción', 'Mucamas'].map((a) => '<button class="' + (ui.area === a ? 'on' : '') + '" data-b="area" data-v="' + a + '">' + a + '</button>').join('') + '</div>' +
+    '<button class="btn ghost" data-b="semana" data-v="-7">‹ Semana anterior</button><button class="btn ghost" data-b="semana" data-v="7">Semana siguiente ›</button><button class="btn dark" data-a="print">' + ic('print', 18) + 'Imprimir</button></div></div>' +
+    '<div class="sheet"><div class="item-h sheet-top"><div><div class="sheet-kick">Torre Jefferson</div><div style="font-size:20px;font-weight:800">Turnos · ' + esc(ui.area) + '</div></div><div style="text-align:right;font-size:13px">Semana del ' + fdate(dias[0]) + ' al ' + fdate(dias[6]) + '</div></div>' +
+    (pers.length ? '<div class="scroll"><table class="turnos"><tr><th>Persona</th>' + dias.map((f) => '<th' + (f === today() ? ' class="hoy"' : '') + '>' + DIAS[new Date(f + 'T12:00').getDay()] + ' ' + ddmm(f) + '</th>').join('') + '</tr>' +
+      pers.map((p) => '<tr><td><b>' + esc(p.nombre) + '</b>' + (isEnc() ? ' <button class="btn ghost sm no-print" data-b="del" data-col="personal" data-id="' + p.id + '" aria-label="Quitar ' + esc(p.nombre) + '">×</button>' : '') + '</td>' + dias.map((f) => cell(p, f)).join('') + '</tr>').join('') + '</table></div>' : '<p class="empty">No hay personal cargado en ' + esc(ui.area) + '.</p>') + '</div>' +
+    (isEnc() ? '<form class="card no-print" data-g="persona" style="margin-top:16px"><h2>Agregar persona</h2><div class="row" style="align-items:flex-end"><label>Nombre<input name="nombre" required></label><label>Área<select name="area">' + opt(['Recepción', 'Mucamas'], ui.area) + '</select></label><button class="btn">Agregar</button></div></form>' : '');
+}
+
+/* ----- Caja chica ----- */
+function vCaja() {
+  const mov = S.cajaMov.slice().sort((a, b) => (b.fecha || '').localeCompare(a.fecha || '') || b.ts - a.ts);
+  const saldo = mov.reduce((s, m) => s + (m.tipo === 'Reposición' ? 1 : -1) * (+m.monto || 0), 0);
+  if (!ui.cMes) ui.cMes = today().slice(0, 7);
+  const delMes = mov.filter((m) => (m.fecha || '').slice(0, 7) === ui.cMes);
+  const g = delMes.filter((m) => m.tipo === 'Gasto').reduce((s, m) => s + (+m.monto || 0), 0), r = delMes.filter((m) => m.tipo === 'Reposición').reduce((s, m) => s + (+m.monto || 0), 0);
+  const canAdd = isStaff();
+  return '<div class="hello no-print"><h1>Caja chica</h1><span class="muted">Gastos y reposiciones con saldo al día.</span></div>' +
+    '<div class="grid">' + (canAdd ? '<form class="card no-print" data-g="caja"><h2>Registrar movimiento</h2><div class="seg"><button type="button" class="' + (ui.cTipo !== 'Reposición' ? 'on' : '') + '" data-b="cTipo" data-v="Gasto">Gasto</button><button type="button" class="' + (ui.cTipo === 'Reposición' ? 'on' : '') + '" data-b="cTipo" data-v="Reposición">Reposición</button></div>' +
+      '<div class="row"><label>Fecha<input name="fecha" type="date" required value="' + today() + '"></label><label>Monto ($)<input name="monto" type="number" min="0" step="0.01" required inputmode="decimal"></label></div>' +
+      '<label>Concepto<input name="concepto" required placeholder="Ej.: lamparitas para el palier del piso 9"></label><label>N.º de comprobante (opcional)<input name="comprobante"></label>' +
+      '<button class="btn">Guardar</button><span class="muted">La foto del comprobante se habilita al pasar al plan Blaze.</span></form>' : '') +
+    '<div class="card wide"><div class="stats"><div class="stat"><b>' + money(saldo) + '</b><span>saldo actual</span></div><div class="stat"><b>' + money(g) + '</b><span>gastos del mes</span></div><div class="stat"><b>' + money(r) + '</b><span>reposiciones del mes</span></div></div>' +
+    '<div class="row no-print" style="align-items:flex-end"><label style="flex:0 1 200px">Mes<input type="month" data-c2="cMes" value="' + ui.cMes + '"></label><button class="btn dark" data-a="print">' + ic('print', 18) + 'Imprimir</button></div>' +
+    (delMes.length ? '<div class="scroll"><table><tr><th>Fecha</th><th>Concepto</th><th>Comp.</th><th>Registró</th><th style="text-align:right">Monto</th>' + (isEnc() ? '<th class="no-print"></th>' : '') + '</tr>' + delMes.map((m) => '<tr><td>' + fdate(m.fecha) + '</td><td>' + esc(m.concepto) + ' <span class="tag ' + (m.tipo === 'Reposición' ? 't-ok' : '') + '">' + esc(m.tipo) + '</span></td><td>' + esc(m.comprobante || '') + '</td><td>' + esc(m.quien || '') + '</td><td style="text-align:right;white-space:nowrap">' + (m.tipo === 'Reposición' ? '+ ' : '− ') + money(m.monto) + '</td>' + (isEnc() ? '<td class="no-print"><button class="btn ghost sm" data-b="del" data-col="cajaMov" data-id="' + m.id + '">Borrar</button></td>' : '') + '</tr>').join('') + '</table></div>' : '<span class="empty">Sin movimientos en este mes.</span>') + '</div></div>';
+}
+
+/* ----- Materiales de limpieza ----- */
+function vMat() {
+  const ms = S.materiales.slice().sort((a, b) => ((+a.stock <= +a.minimo) ? 0 : 1) - ((+b.stock <= +b.minimo) ? 0 : 1) || a.nombre.localeCompare(b.nombre));
+  const movs = S.matMov.slice().sort((a, b) => b.ts - a.ts).slice(0, 15);
+  return '<div class="hello"><h1>Materiales y productos de limpieza</h1><span class="muted">' + count(ms, (m) => +m.stock <= +m.minimo) + ' para reponer.</span></div>' +
+    '<div class="grid"><div class="card wide"><h2>Stock</h2>' + (ms.length ? ms.map((m) => { const low = +m.stock <= +m.minimo;
+      return '<div class="item"><div class="item-h"><span class="item-t">' + esc(m.nombre) + '</span><span class="tag ' + (low ? 't-bad' : 't-ok') + '">' + (low ? 'Reponer' : 'OK') + '</span></div><span><b class="big-n">' + (+m.stock || 0) + '</b> ' + esc(m.unidad || '') + ' <span class="muted">· mínimo ' + (+m.minimo || 0) + '</span></span>' +
+        '<div class="row"><button class="btn sm" data-b="matMov" data-t="Entrega" data-id="' + m.id + '">Entregar</button><button class="btn ghost sm" data-b="matMov" data-t="Ingreso" data-id="' + m.id + '">Ingreso de compra</button>' + (isEnc() ? '<button class="btn ghost sm" data-b="matEdit" data-id="' + m.id + '">Editar</button><button class="btn danger sm" data-b="del" data-col="materiales" data-id="' + m.id + '">Borrar</button>' : '') + '</div></div>'; }).join('') : '<span class="empty">No hay materiales cargados.</span>') +
+    (isEnc() ? '<div><button class="btn ghost sm" data-b="matNew">Agregar material</button></div>' : '') + '</div>' +
+    '<div class="card"><h2>Movimientos recientes</h2>' + (movs.length ? movs.map((x) => '<div class="item-h"><span>' + esc(when(x.ts)) + ' · <b>' + esc(x.tipo) + '</b> ' + x.cantidad + ' ' + esc(x.material) + (x.destino ? ' · ' + esc(x.destino) : '') + '</span></div>').join('') : '<span class="empty">Sin movimientos.</span>') + '</div></div>';
+}
+function matForm(m) {
+  m = m || { unidad: 'unidades', stock: 0, minimo: 1 };
+  modal('<h2>' + (m.id ? 'Editar' : 'Nuevo') + ' material</h2><label>Producto<input name="nombre" required value="' + esc(m.nombre || '') + '" placeholder="Ej.: Lavandina"></label><div class="row"><label>Unidad<input name="unidad" value="' + esc(m.unidad || '') + '" placeholder="litros, paquetes…"></label><label>Stock actual<input name="stock" type="number" min="0" step="any" value="' + (+m.stock || 0) + '"></label><label>Mínimo<input name="minimo" type="number" min="0" step="any" value="' + (+m.minimo || 0) + '"></label></div><div class="row"><button type="button" class="btn ghost" data-cancel="1">Cancelar</button><button class="btn">Guardar</button></div>',
+    (fd) => { const d = { nombre: val(fd, 'nombre'), unidad: val(fd, 'unidad'), stock: +fd.get('stock') || 0, minimo: +fd.get('minimo') || 0 };
+      return run(() => m.id ? updateDoc(doc(db, 'materiales', m.id), d) : addDoc(collection(db, 'materiales'), { ...d, creado: Date.now() }), 'Material guardado'); });
+}
+
+/* ----- Eventos de la Etapa 2 ----- */
+document.addEventListener('submit', (e) => {
+  const f = e.target.closest('form[data-g]'); if (!f) return;
+  const fd = new FormData(f), g = f.dataset.g;
+  const fin = () => { f.reset(); document.activeElement && document.activeElement.blur(); render(); };
+  if (g === 'persona') { e.preventDefault(); run(() => addDoc(collection(db, 'personal'), { nombre: val(fd, 'nombre'), area: val(fd, 'area'), activo: true, creado: Date.now() }), 'Persona agregada').then(fin); }
+  if (g === 'caja') { e.preventDefault(); const monto = +fd.get('monto'); if (!(monto > 0)) { toast('Ingresá un monto mayor a 0'); return; }
+    conNombre(() => run(() => addDoc(collection(db, 'cajaMov'), { tipo: ui.cTipo === 'Reposición' ? 'Reposición' : 'Gasto', fecha: val(fd, 'fecha'), monto, concepto: val(fd, 'concepto'), comprobante: val(fd, 'comprobante'), quien: nombreTurno(), ts: Date.now() }), 'Movimiento guardado').then(fin)); }
+});
+document.addEventListener('click', (e) => {
+  const b = e.target.closest('[data-b]'); if (!b) return; const a = b.dataset.b, id = b.dataset.id;
+  const find = (c) => S[c].find((x) => x.id === id);
+  if (a === 'gsub') { ui.gsub = b.dataset.v; go(); }
+  else if (a === 'provNew') provForm();
+  else if (a === 'provEdit') provForm(find('proveedores'));
+  else if (a === 'visNew') { const p = find('proveedores'); conNombre(() => modal('<h2>Visita: ' + esc(p.servicio) + '</h2><span class="muted">' + esc(p.nombre) + '</span><label>Fecha<input name="fecha" type="date" required value="' + today() + '"></label><label>Trabajo realizado<input name="trabajo" placeholder="Ej.: mantenimiento mensual, sin novedades"></label><div class="row"><button type="button" class="btn ghost" data-cancel="1">Cancelar</button><button class="btn">Registrar</button></div>',
+      (fd) => run(() => addDoc(collection(db, 'visitasProv'), { provId: p.id, proveedor: p.servicio + ' · ' + p.nombre, fecha: val(fd, 'fecha'), trabajo: val(fd, 'trabajo'), quien: nombreTurno(), ts: Date.now() }), 'Visita registrada'))); }
+  else if (a === 'mucNew') mucForm();
+  else if (a === 'mucEdit') mucForm(find('servicioMucama'));
+  else if (a === 'mucExtra') { const ms = mucamas(); modal('<h2>Visita puntual · ' + esc(dlabel(ui.mFecha)) + '</h2><div class="row"><label>Apartamento<input name="apto" inputmode="numeric" required></label><label>Hora<input name="hora" type="time" required value="10:00"></label></div><label>Mucama' + (ms.length ? '<select name="mucama">' + opt([''].concat(ms), '') + '</select>' : '<input name="mucama">') + '</label><label>Notas<input name="notas"></label><div class="row"><button type="button" class="btn ghost" data-cancel="1">Cancelar</button><button class="btn">Agregar</button></div>',
+      (fd) => { const ap = val(fd, 'apto'); if (!validApto(ap)) { toast('Apartamento inválido (del 107 al 1712)'); return false; }
+        return run(() => addDoc(collection(db, 'agendaMucama'), { fecha: ui.mFecha, apto: ap, hora: val(fd, 'hora'), mucama: val(fd, 'mucama'), notas: val(fd, 'notas'), creado: Date.now() }), 'Visita agregada'); }); }
+  else if (a === 'mucTick') { const hId = b.dataset.h;
+    if (hId) run(() => deleteDoc(doc(db, 'mucamaHechos', hId)), 'Desmarcado');
+    else conNombre(() => run(() => addDoc(collection(db, 'mucamaHechos'), { fecha: ui.mFecha, key: b.dataset.k, apto: b.dataset.apto, quien: nombreTurno(), ts: Date.now() }), 'Servicio marcado como hecho')); }
+  else if (a === 'area') { ui.area = b.dataset.v; render(); }
+  else if (a === 'semana') { ui.semana = addTo(ui.semana || lunes(today()), +b.dataset.v); render(); }
+  else if (a === 'tCell') { const p = S.personal.find((x) => x.id === b.dataset.p), f = b.dataset.f; const docId = p.id + '_' + f; const cur = (S.turnosPersonal.find((x) => x.id === docId) || {}).valor || '';
+    modal('<h2>' + esc(p.nombre) + ' · ' + esc(dlabel(f)) + '</h2><div class="pills">' + TURNO_OPC[p.area].map((o) => '<button type="button" class="pill' + (cur === o ? ' on' : '') + '" data-b="tPick" data-v="' + esc(o) + '">' + esc(o) + '</button>').join('') + '</div>' +
+      '<label>Otro horario o detalle<input name="valor" value="' + esc(cur) + '" placeholder="Ej.: 8 a 16, cubre a otro compañero"></label><div class="row"><button type="button" class="btn ghost" data-b="tClear">Dejar vacío</button><button class="btn">Guardar</button></div>',
+      (fd) => { const v = val(fd, 'valor'); return run(() => v ? setDoc(doc(db, 'turnosPersonal', docId), { personaId: p.id, persona: p.nombre, area: p.area, fecha: f, valor: v, ts: Date.now() }) : deleteDoc(doc(db, 'turnosPersonal', docId)), 'Turno guardado'); }); }
+  else if (a === 'tPick') { const i = document.querySelector('#mform [name=valor]'); if (i) { i.value = b.dataset.v; document.getElementById('mform').requestSubmit(); } }
+  else if (a === 'tClear') { const i = document.querySelector('#mform [name=valor]'); if (i) { i.value = ''; document.getElementById('mform').requestSubmit(); } }
+  else if (a === 'cTipo') { ui.cTipo = b.dataset.v; b.parentNode.querySelectorAll('button').forEach((x) => x.classList.toggle('on', x === b)); }
+  else if (a === 'matNew') matForm();
+  else if (a === 'matEdit') matForm(find('materiales'));
+  else if (a === 'matMov') { const m = find('materiales'), t = b.dataset.t; conNombre(() => modal('<h2>' + (t === 'Entrega' ? 'Entregar' : 'Ingreso de compra') + ': ' + esc(m.nombre) + '</h2><span class="muted">Stock actual: ' + (+m.stock || 0) + ' ' + esc(m.unidad || '') + '</span><label>Cantidad<input name="cantidad" type="number" min="0" step="any" required></label><label>' + (t === 'Entrega' ? 'Para quién o dónde' : 'Proveedor o compra') + '<input name="destino" placeholder="' + (t === 'Entrega' ? 'Ej.: Mucama 1, limpieza del hall' : 'Ej.: compra en supermercado') + '"></label><div class="row"><button type="button" class="btn ghost" data-cancel="1">Cancelar</button><button class="btn">Guardar</button></div>',
+      (fd) => { const q = +fd.get('cantidad'); if (!(q > 0)) { toast('Ingresá una cantidad mayor a 0'); return false; }
+        if (t === 'Entrega' && q > (+m.stock || 0)) { toast('No hay stock suficiente'); return false; }
+        return run(async () => { await updateDoc(doc(db, 'materiales', m.id), { stock: increment(t === 'Entrega' ? -q : q) }); await addDoc(collection(db, 'matMov'), { materialId: m.id, material: m.nombre, tipo: t, cantidad: q, destino: val(fd, 'destino'), quien: nombreTurno(), ts: Date.now() }); }, t === 'Entrega' ? 'Entrega registrada' : 'Ingreso registrado'); })); }
+});
+
+VIEWS.caja = () => vCaja();
+
 /* ---------------- Ayuda / instrucciones ---------------- */
 const steps = (arr) => '<ol class="steps">' + arr.map((x) => '<li>' + x + '</li>').join('') + '</ol>';
 const sec = (title, body, open) => '<details class="help"' + (open ? ' open' : '') + '><summary>' + title + '</summary><div class="help-b">' + body + '</div></details>';
@@ -615,6 +828,11 @@ const HELP = {
     sec('Vehículos para seguridad del complejo', '<p>En <b>Vehículos</b> está el listado de matrículas vigentes. Con <b>Copiar listado para seguridad</b> lo pegás en un WhatsApp o mail a seguridad; incluye las altas y bajas de los últimos 7 días.</p><p>Los vehículos se cargan desde la ficha del apartamento: el del propietario queda permanente, el del inquilino con fecha de baja.</p>'),
     sec('Tareas del turno', steps(['Andá a <b>Tareas</b>. Se abre el turno actual (Mañana 6 a 14, Tarde 14 a 22, Noche 22 a 6).', 'La primera vez, indicá <b>quién está de turno</b>.', 'Al terminar cada tarea, tocá su casilla; podés agregar un comentario (ej.: "tanque 2 al 60 %").', 'Si te equivocaste, tocá de nuevo la casilla para desmarcarla.']) + '<p class="muted">Las tareas semanales o quincenales (generador, cambio de bomba) aparecen solo cuando toca.</p>'),
     sec('Control de llaves', steps(['Andá a <b>Llaves</b>.', 'Para entregar una llave, tocá <b>Prestar</b> e indicá quién se la lleva y para qué.', 'Cuando la devuelven, tocá <b>Registrar devolución</b>.', 'Al cerrar el turno, tocá <b>Control de inventario</b>, marcá las llaves que están en el tablero y guardá: la app indica si falta alguna.'])),
+    sec('Gestión: proveedores de servicio', steps(['Andá a <b>Gestión → Proveedores</b>.', 'Cada servicio (ascensores, generador, perfumadores, gimnasio…) muestra la última visita y cuándo toca la próxima. En rojo, las vencidas.', 'Cuando viene el técnico, tocá <b>Registrar visita</b> y anotá el trabajo realizado.', 'El encargado y recepción agregan o editan proveedores y su periodicidad.'])),
+    sec('Gestión: mucamas', steps(['Andá a <b>Gestión → Mucamas</b> y elegí el día.', 'La agenda junta los servicios contratados (por días y hora) y las visitas puntuales.', 'Tocá <b>Imprimir agenda</b> para darle la planilla a las mucamas, o marcá cada servicio como hecho en la app.', 'El encargado y recepción cargan qué apartamentos tienen el servicio.'])),
+    sec('Gestión: turnos del personal', '<p>En <b>Gestión → Turnos del personal</b> ves la planilla semanal de recepción y de mucamas por separado. El encargado toca cada celda para asignar turno, día libre, licencia u otro horario, y agrega o quita personas. Se puede imprimir.</p>'),
+    sec('Gestión: caja chica', steps(['Andá a <b>Gestión → Caja chica</b>.', 'Elegí <b>Gasto</b> o <b>Reposición</b>, completá fecha, monto, concepto y número de comprobante, y tocá <b>Guardar</b>.', 'Arriba ves el saldo actual y los totales del mes; podés imprimir el detalle del mes.']) + '<p class="muted">La comisión puede consultar la caja chica. Solo el encargado borra movimientos.</p>'),
+    sec('Gestión: materiales de limpieza', steps(['Andá a <b>Gestión → Materiales</b>.', 'Al entregar productos, tocá <b>Entregar</b> e indicá cantidad y para quién.', 'Cuando llega una compra, tocá <b>Ingreso de compra</b>.', 'Los productos que bajan del mínimo aparecen primero, marcados <b>Reponer</b>.'])),
     sec('Reservas', '<p>En <b>Reservas</b> ves todas las próximas reservas del gimnasio, el cowork, la sauna y la sala de masajes, y podés cancelar una si el vecino lo pide.</p>'),
     HELP_INSTALAR
   ],
@@ -627,6 +845,7 @@ const HELP = {
   comision: () => [
     sec('Publicar un comunicado', steps(['Andá a <b>Comunicados</b>.', 'Escribí el título, elegí la etiqueta (Importante, Mantenimiento, Convivencia o General) y el texto.', 'Tocá <b>Publicar</b>. Lo ven todos los vecinos, también los inquilinos de temporada.', 'Para quitarlo, tocá <b>Eliminar</b>.']) + '<p class="muted">Los comunicados no admiten comentarios.</p>', true),
     sec('Ver las novedades de portería', '<p>En <b>Novedades</b> ves lo que registra portería en cada turno y su estado. Es solo lectura.</p>'),
+    sec('Consultar la caja chica', '<p>En <b>Caja chica</b> ves el saldo, los gastos y las reposiciones de cada mes, con quién registró cada movimiento. Es solo lectura.</p>'),
     sec('Observaciones de la prueba', '<p>En <b>Observaciones</b> ves lo que anotaron quienes probaron la app.</p>'),
     HELP_INSTALAR
   ]
@@ -732,8 +951,43 @@ function seedEtapa1() {
       .map((n) => ({ nombre: n, estado: n === 'Azotea' ? 'Prestada' : 'En recepción', prestadaA: n === 'Azotea' ? 'Técnico de antenas' : '', motivo: n === 'Azotea' ? 'Revisión de antena' : '', desde: n === 'Azotea' ? Date.now() - 3600000 : null, entrego: n === 'Azotea' ? 'Portero (ejemplo)' : '', ...E }))
   };
 }
+function seedEtapa2() {
+  const E = { ejemplo: true, creado: Date.now() }, d = (n) => ymd(addDays(n));
+  const pers = [['p1', 'Portero 1 (ejemplo)', 'Recepción'], ['p2', 'Portero 2 (ejemplo)', 'Recepción'], ['p3', 'Portero 3 (ejemplo)', 'Recepción'], ['p4', 'Portero noche (ejemplo)', 'Recepción'], ['p5', 'Encargado (ejemplo)', 'Recepción'], ['m1', 'Mucama 1 (ejemplo)', 'Mucamas'], ['m2', 'Mucama 2 (ejemplo)', 'Mucamas']];
+  const lun = lunes(today()); const tp = [];
+  const plan = { p1: ['Mañana 6–14', 'Mañana 6–14', 'Mañana 6–14', 'Mañana 6–14', 'Mañana 6–14', 'Libre', 'Libre'], p2: ['Mañana 6–14', 'Mañana 6–14', 'Libre', 'Libre', 'Mañana 6–14', 'Mañana 6–14', 'Mañana 6–14'],
+    p3: ['Tarde 14–22', 'Tarde 14–22', 'Tarde 14–22', 'Tarde 14–22', 'Libre', 'Libre', 'Tarde 14–22'], p4: ['Noche 22–6', 'Noche 22–6', 'Noche 22–6', 'Libre', 'Libre', 'Noche 22–6', 'Noche 22–6'],
+    p5: ['8 a 16', '8 a 16', '8 a 16', '8 a 16', '8 a 16', 'Libre', 'Libre'], m1: ['Mañana', 'Mañana', 'Mañana', 'Mañana', 'Mañana', 'Mañana', 'Libre'], m2: ['Tarde', 'Tarde', 'Licencia', 'Licencia', 'Tarde', 'Libre', 'Tarde'] };
+  Object.keys(plan).forEach((pid) => plan[pid].forEach((v, k) => { const f = addTo(lun, k); const pr = pers.find((x) => x[0] === pid); tp.push({ id: pid + '_' + f, personaId: pid, persona: pr[1], area: pr[2], fecha: f, valor: v, ts: Date.now(), ejemplo: true }); }));
+  return {
+    proveedores: [
+      { id: 'pv1', servicio: 'Ascensores', nombre: 'Empresa de ascensores (ejemplo)', telefono: '', periodicidad: 30, notas: 'Mantenimiento mensual por contrato.' },
+      { id: 'pv2', servicio: 'Generador', nombre: 'Técnico del generador (ejemplo)', telefono: '', periodicidad: 30, notas: '' },
+      { id: 'pv3', servicio: 'Perfumadores', nombre: 'Servicio de aromatización (ejemplo)', telefono: '', periodicidad: 15, notas: '' },
+      { id: 'pv4', servicio: 'Mantenimiento del gimnasio', nombre: 'Técnico de equipos (ejemplo)', telefono: '', periodicidad: 60, notas: '' },
+      { id: 'pv5', servicio: 'Fumigación', nombre: 'Control de plagas (ejemplo)', telefono: '', periodicidad: 90, notas: '' }
+    ].map((x) => ({ ...x, ...E })),
+    visitasProv: [['pv1', 'Ascensores', d(-25), 'Mantenimiento mensual, sin novedades'], ['pv1', 'Ascensores', d(-55), 'Cambio de botonera piso 4'], ['pv2', 'Generador', d(-40), 'Prueba de carga'], ['pv3', 'Perfumadores', d(-10), 'Recarga de difusores'], ['pv4', 'Mantenimiento del gimnasio', d(-20), 'Ajuste de cintas'], ['pv5', 'Fumigación', d(-95), 'Fumigación general']]
+      .map((x) => ({ provId: x[0], proveedor: x[1], fecha: x[2], trabajo: x[3], quien: 'Portero (ejemplo)', ts: Date.now(), ejemplo: true })),
+    personal: pers.map((x) => ({ id: x[0], nombre: x[1], area: x[2], activo: true, ...E })),
+    turnosPersonal: tp,
+    servicioMucama: [
+      { apto: '1207', dias: [1, 3, 5], hora: '10:00', mucama: 'Mucama 1 (ejemplo)', desde: '', hasta: '', notas: 'Cambio de sábanas los viernes', activo: true },
+      { apto: '909', dias: [0, 1, 2, 3, 4, 5, 6], hora: '09:00', mucama: 'Mucama 2 (ejemplo)', desde: d(-1), hasta: d(12), notas: 'Temporada', activo: true },
+      { apto: '410', dias: [2, 4], hora: '11:00', mucama: 'Mucama 1 (ejemplo)', desde: '', hasta: d(5), notas: '', activo: true }
+    ].map((x) => ({ ...x, ...E })),
+    cajaMov: [
+      { tipo: 'Reposición', fecha: d(-12), monto: 5000, concepto: 'Fondo de caja chica', comprobante: '', quien: 'Encargado (ejemplo)' },
+      { tipo: 'Gasto', fecha: d(-8), monto: 850, concepto: 'Lamparitas para palieres', comprobante: '12345', quien: 'Portero (ejemplo)' },
+      { tipo: 'Gasto', fecha: d(-3), monto: 1200, concepto: 'Ferretería: silicona y tornillos', comprobante: '6789', quien: 'Portero (ejemplo)' },
+      { tipo: 'Gasto', fecha: d(0), monto: 390, concepto: 'Pilas para controles', comprobante: '', quien: 'Portero (ejemplo)' }
+    ].map((x) => ({ ...x, ts: Date.now(), ejemplo: true })),
+    materiales: [['Lavandina', 'litros', 12, 5], ['Detergente', 'litros', 3, 4], ['Bolsas de residuos', 'paquetes', 20, 10], ['Papel higiénico', 'paquetes', 8, 10], ['Limpiavidrios', 'unidades', 4, 2], ['Desinfectante de pisos', 'litros', 6, 4]]
+      .map((x) => ({ nombre: x[0], unidad: x[1], stock: x[2], minimo: x[3], ...E }))
+  };
+}
 async function seed() {
-  const data = Object.assign(seedDocs(), seedEtapa1()); let b = writeBatch(db), k = 0;
+  const data = Object.assign(seedDocs(), seedEtapa1(), seedEtapa2()); let b = writeBatch(db), k = 0;
   for (const c of Object.keys(data)) for (const d of data[c]) {
     const { id, ...rest } = d; b.set(id ? doc(db, c, id) : doc(collection(db, c)), rest);
     if (++k % 400 === 0) { await b.commit(); b = writeBatch(db); }
@@ -741,7 +995,7 @@ async function seed() {
   await b.commit();
 }
 async function wipe() {
-  for (const c of ['reservas', 'pedidos', 'avisos', 'ocupantes', 'comunicados', 'novedades', 'unidades', 'residentes', 'vehiculos', 'autorizaciones', 'tareas', 'tareasHechas', 'llaves', 'llavesMov', 'llavesControl']) {
+  for (const c of ['reservas', 'pedidos', 'avisos', 'ocupantes', 'comunicados', 'novedades', 'unidades', 'residentes', 'vehiculos', 'autorizaciones', 'tareas', 'tareasHechas', 'llaves', 'llavesMov', 'llavesControl', 'proveedores', 'visitasProv', 'servicioMucama', 'agendaMucama', 'mucamaHechos', 'personal', 'turnosPersonal', 'cajaMov', 'materiales', 'matMov']) {
     const snap = await getDocs(collection(db, c));
     let b = writeBatch(db), k = 0;
     for (const d of snap.docs) { b.delete(d.ref); if (++k % 400 === 0) { await b.commit(); b = writeBatch(db); } }

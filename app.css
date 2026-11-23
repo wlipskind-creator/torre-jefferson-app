@@ -189,3 +189,19 @@ a{color:var(--ac)}
   .unit small,.unit i{display:none}
   .card .building{margin:0 -6px}
 }
+
+.tcell{display:inline-block;min-width:92px;min-height:40px;padding:6px 8px;border-radius:8px;border:1px solid var(--line);background:var(--card);font-size:13px;font-weight:600;text-align:center;color:var(--ink)}
+button.tcell{cursor:pointer}
+.tcell.t-trab{background:var(--ac-l);color:var(--ac-d);border-color:var(--ac)}
+.tcell.t-libre{background:var(--off);color:var(--off-ink)}
+.tcell.t-lic{background:var(--sand-l);color:var(--sand-d);border-color:var(--sand)}
+table.turnos td,table.turnos th{text-align:center;white-space:nowrap}
+table.turnos td:first-child,table.turnos th:first-child{text-align:left}
+th.hoy{color:var(--ac)}
+.check-pill{flex-direction:row;align-items:center;gap:6px;display:inline-flex;cursor:pointer}
+.check-pill input{width:18px;min-height:18px;height:18px}
+.big-n{font-size:22px}
+.mini-hist summary{cursor:pointer;font-size:13px;font-weight:600;color:var(--ac)}
+.mini-hist div{padding:2px 0}
+.print-only{display:none}
+@media print{.print-only{display:table-cell}.no-print{display:none!important}}
